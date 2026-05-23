@@ -510,7 +510,7 @@ function Hero({ onStart, onLibrary }: { onStart: () => void; onLibrary: () => vo
       </div>
       <div className="mt-12 sm:mt-16 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
         {[
-          { k: `${CASES.length}`, v: "casos calculados" },
+          { k: `${totalCatalogued}`, v: "casos calculados" },
           { k: "2 linhas", v: "externo + interno" },
           { k: "ROI", v: "tempo + dinheiro" },
           { k: "Fontes", v: "mercado + diagnóstico" },
