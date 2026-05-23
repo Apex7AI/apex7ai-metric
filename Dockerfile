@@ -9,8 +9,7 @@ RUN bun install --frozen-lockfile || bun install
 
 # Copy source and build
 COPY . .
-RUN bun -e "import { Generator, getConfig } from '@tanstack/router-generator'; const config = getConfig({ routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts', target: 'react' }, process.cwd()); const g = new Generator({ root: process.cwd(), config }); await g.run();"
-RUN bun run build
+RUN rm -f src/routeTree.gen.ts && bun run build
 
 # ---------- Stage 2: runtime ----------
 FROM oven/bun:1.3.14-slim AS runner
@@ -29,5 +28,5 @@ COPY --from=builder /app/.output ./.output
 
 EXPOSE 3000
 
-# Serve the built Worker via wrangler (uses workerd runtime locally)
-CMD ["bunx", "wrangler", "dev", "--ip", "0.0.0.0", "--port", "3000", "--local", "--no-show-interactive-dev-session"]
+# Serve the production build on the container port expected by EasyPanel
+CMD ["bun", "run", "preview", "--host", "0.0.0.0", "--port", "3000"]
