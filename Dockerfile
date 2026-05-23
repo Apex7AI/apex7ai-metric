@@ -23,10 +23,11 @@ RUN npm install -g serve
 # Copiamos o conteúdo de dist/client direto para a WORKDIR
 COPY --from=builder /app/dist/client ./
 
-# Garantimos que o index.html existe (o TanStack Start pode gerar como _shell.html)
+# Garantimos que o index.html existe
 RUN if [ -f _shell.html ]; then cp _shell.html index.html; fi
 
-EXPOSE 3000
+# Mudamos para a porta 80 para bater com o padrão do seu Easypanel
+EXPOSE 80
 
-# Rodamos o serve na raiz da pasta, garantindo que o roteamento SPA funcione (-s)
-CMD ["serve", "-s", ".", "-l", "3000"]
+# Rodamos o serve na porta 80
+CMD ["serve", "-s", ".", "-l", "80"]
