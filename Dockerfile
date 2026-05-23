@@ -2,10 +2,10 @@
 FROM node:22.12-bookworm-slim AS builder
 WORKDIR /app
 
-# Install Bun
+# Install Bun for fast package management
 RUN npm install -g bun@1.3.14
 
-# Install deps
+# Install deps (cacheable layer)
 COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile || bun install
 
@@ -22,16 +22,10 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
 
-# Install wrangler globalmente para rodar o worker
-RUN npm install -g wrangler@3.109.2
-
-# Copiar arquivos necessários do builder
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/wrangler.jsonc ./wrangler.jsonc
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
+# Copiamos TUDO do builder para garantir que o wrangler encontre os fontes e configs
+COPY --from=builder /app ./
 
 EXPOSE 3000
 
-# O comando que o Lovable usa para simular o Cloudflare localmente
-CMD ["wrangler", "dev", "--ip", "0.0.0.0", "--port", "3000", "--local", "--no-show-interactive-dev-session"]
+# Usamos o wrangler que já está no node_modules para evitar erros de versão
+CMD ["./node_modules/.bin/wrangler", "dev", "--ip", "0.0.0.0", "--port", "3000", "--local", "--no-show-interactive-dev-session"]
