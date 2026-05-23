@@ -2,30 +2,31 @@
 FROM node:22.12-bookworm-slim AS builder
 WORKDIR /app
 
-# Install Bun for fast package management
+# Install Bun
 RUN npm install -g bun@1.3.14
 
-# Install deps (cacheable layer)
+# Install deps
 COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile || bun install
 
 # Copy source and build
 COPY . .
-# Remove old route tree and build
 RUN rm -f src/routeTree.gen.ts && bun run build
+
+# O TanStack Start SPA gera um _shell.html, precisamos dele como index.html
+RUN cp dist/client/_shell.html dist/client/index.html || echo "index.html already exists"
 
 # ---------- Stage 2: runtime ----------
 FROM node:22.12-bookworm-slim AS runner
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOST=0.0.0.0
+# Servidor estático ultra leve
+RUN npm install -g serve
 
-# Copiamos TUDO do builder para garantir que o wrangler encontre os fontes e configs
-COPY --from=builder /app ./
+# Copiar apenas os arquivos prontos (muito mais leve)
+COPY --from=builder /app/dist/client ./dist/client
 
 EXPOSE 3000
 
-# Usamos o wrangler que já está no node_modules para evitar erros de versão
-CMD ["./node_modules/.bin/wrangler", "dev", "--ip", "0.0.0.0", "--port", "3000", "--local", "--no-show-interactive-dev-session"]
+# Comando para rodar em modo SPA (-s) na porta 3000
+CMD ["serve", "-s", "dist/client", "-l", "3000"]
