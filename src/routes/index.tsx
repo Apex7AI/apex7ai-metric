@@ -76,8 +76,17 @@ function Index() {
   const [answers, setAnswers] = useState<Answers>(INITIAL_ANSWERS);
   const [showResult, setShowResult] = useState(false);
   const [flashPlan, setFlashPlan] = useState(false);
+  const [extraCalcs, setExtraCalcs] = useState(0);
   const resultRef = useRef<HTMLElement | null>(null);
   const planRef = useRef<HTMLDivElement | null>(null);
+
+  // Contador persistente de cálculos realizados
+  useEffect(() => {
+    const stored = Number(localStorage.getItem("apex7_calc_count") || "0");
+    if (!Number.isNaN(stored)) setExtraCalcs(stored);
+  }, []);
+
+  const totalCatalogued = CASES.length + extraCalcs;
 
   const recommended = useMemo(() => {
     if (!answers.pain) return [] as RoiCase[];
