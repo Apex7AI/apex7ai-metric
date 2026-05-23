@@ -139,6 +139,11 @@ function Index() {
 
   const finishDiagnostic = () => {
     setShowResult(true);
+    setExtraCalcs((n) => {
+      const next = n + 1;
+      try { localStorage.setItem("apex7_calc_count", String(next)); } catch {}
+      return next;
+    });
     setTimeout(() => {
       resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
