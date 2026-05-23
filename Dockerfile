@@ -9,7 +9,7 @@ RUN bun install --frozen-lockfile || bun install
 
 # Copy source and build
 COPY . .
-RUN bun -e "import { Generator } from '@tanstack/router-generator'; const g = new Generator({ root: process.cwd(), config: { routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts', target: 'react' } }); await g.run();"
+RUN bun -e "import { Generator, getConfig } from '@tanstack/router-generator'; const config = getConfig({ routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts', target: 'react' }, process.cwd()); const g = new Generator({ root: process.cwd(), config }); await g.run();"
 RUN bun run build
 
 # ---------- Stage 2: runtime ----------
