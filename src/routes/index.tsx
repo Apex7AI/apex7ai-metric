@@ -348,9 +348,9 @@ function Index() {
           <SectionLabel>03 — Biblioteca de ROI</SectionLabel>
           <div className="mt-3 flex items-end justify-between flex-wrap gap-4">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight">
-              {CASES.length} casos calculados.
+              <span className="text-blue-gradient tabular-nums">{totalCatalogued}</span> casos calculados.
               <br />
-              <span className="text-muted-foreground">Externo + interno.</span>
+              <span className="text-muted-foreground">Externo + interno {extraCalcs > 0 && <span className="text-sm font-normal">· +{extraCalcs} pelo seu diagnóstico</span>}.</span>
             </h2>
           </div>
           <Library />
