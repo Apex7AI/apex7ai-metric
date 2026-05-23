@@ -479,7 +479,7 @@ function Header({ onHome, onStart }: { onHome: () => void; onStart: () => void }
   );
 }
 
-function Hero({ onStart, onLibrary }: { onStart: () => void; onLibrary: () => void }) {
+function Hero({ onStart, onLibrary, totalCases }: { onStart: () => void; onLibrary: () => void; totalCases: number }) {
   return (
     <section className="pt-20 sm:pt-24 md:pt-32 text-center">
       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-secondary/60 text-xs text-muted-foreground">
