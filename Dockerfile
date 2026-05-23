@@ -13,20 +13,20 @@ RUN bun install --frozen-lockfile || bun install
 COPY . .
 RUN rm -f src/routeTree.gen.ts && bun run build
 
-# O TanStack Start SPA gera um _shell.html, precisamos dele como index.html
-RUN cp dist/client/_shell.html dist/client/index.html || echo "index.html already exists"
-
 # ---------- Stage 2: runtime ----------
 FROM node:22.12-bookworm-slim AS runner
 WORKDIR /app
 
-# Servidor estático ultra leve
+# Servidor estático
 RUN npm install -g serve
 
-# Copiar apenas os arquivos prontos (muito mais leve)
-COPY --from=builder /app/dist/client ./dist/client
+# Copiamos o conteúdo de dist/client direto para a WORKDIR
+COPY --from=builder /app/dist/client ./
+
+# Garantimos que o index.html existe (o TanStack Start pode gerar como _shell.html)
+RUN if [ -f _shell.html ]; then cp _shell.html index.html; fi
 
 EXPOSE 3000
 
-# Comando para rodar em modo SPA (-s) na porta 3000
-CMD ["serve", "-s", "dist/client", "-l", "3000"]
+# Rodamos o serve na raiz da pasta, garantindo que o roteamento SPA funcione (-s)
+CMD ["serve", "-s", ".", "-l", "3000"]
