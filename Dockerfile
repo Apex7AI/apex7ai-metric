@@ -1,6 +1,9 @@
 # ---------- Stage 1: build ----------
-FROM oven/bun:1.1 AS builder
+FROM node:22.12-bookworm-slim AS builder
 WORKDIR /app
+
+# Install Bun for fast package management
+RUN npm install -g bun@1.3.14
 
 # Install deps (cacheable layer)
 COPY package.json bun.lock* bunfig.toml* ./
@@ -8,23 +11,24 @@ RUN bun install --frozen-lockfile || bun install
 
 # Copy source and build
 COPY . .
-RUN bun run build
+# Remove old route tree and build using Vite directly
+RUN rm -f src/routeTree.gen.ts && node ./node_modules/vite/bin/vite.js build
 
 # ---------- Stage 2: runtime ----------
-FROM oven/bun:1.1-slim AS runner
+FROM node:22.12-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
 
-# Copy only the built client assets
-COPY --from=builder /app/dist/client ./dist/client
+# Install 'serve' to handle SPA static files and routing
+RUN npm install -g serve
 
-# Install a simple static server
-RUN bun add serve
+# Copy only the built client assets from the builder stage
+COPY --from=builder /app/dist/client ./dist/client
 
 EXPOSE 3000
 
-# Start the server and handle SPA routing by serving index.html for unknown routes
-CMD ["bunx", "serve", "-s", "dist/client", "-l", "3000"]
+# Start 'serve' in SPA mode (-s) on port 3000
+CMD ["serve", "-s", "dist/client", "-l", "3000"]
