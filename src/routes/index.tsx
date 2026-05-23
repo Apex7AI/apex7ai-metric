@@ -177,7 +177,7 @@ function Index() {
       <Header onHome={goHome} onStart={startDiagnostic} />
 
       <main className="mx-auto max-w-6xl px-4 sm:px-6 pb-32">
-        <Hero onStart={startDiagnostic} onLibrary={() => smoothScrollTo("biblioteca")} />
+        <Hero onStart={startDiagnostic} onLibrary={() => smoothScrollTo("biblioteca")} totalCases={totalCatalogued} />
 
         {step >= 1 && (
           <section id="diagnostico" className="mt-20 sm:mt-24 scroll-mt-24">
