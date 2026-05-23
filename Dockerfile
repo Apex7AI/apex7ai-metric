@@ -1,17 +1,19 @@
 # ---------- Stage 1: build ----------
-FROM oven/bun:1.1 AS builder
+# Bun 1.3.x reports a Node-compatible runtime new enough for Vite 7.
+FROM oven/bun:1.3.14 AS builder
 WORKDIR /app
 
 # Install deps (cacheable layer)
-COPY package.json bun.lockb* bunfig.toml* ./
+COPY package.json bun.lock* bunfig.toml* ./
 RUN bun install --frozen-lockfile || bun install
 
 # Copy source and build
 COPY . .
+RUN bun -e "import { Generator } from '@tanstack/router-generator'; const g = new Generator({ root: process.cwd(), config: { routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts', target: 'react' } }); await g.run();"
 RUN bun run build
 
 # ---------- Stage 2: runtime ----------
-FROM oven/bun:1.1-slim AS runner
+FROM oven/bun:1.3.14-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
