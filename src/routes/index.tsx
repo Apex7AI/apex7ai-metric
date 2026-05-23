@@ -76,8 +76,17 @@ function Index() {
   const [answers, setAnswers] = useState<Answers>(INITIAL_ANSWERS);
   const [showResult, setShowResult] = useState(false);
   const [flashPlan, setFlashPlan] = useState(false);
+  const [extraCalcs, setExtraCalcs] = useState(0);
   const resultRef = useRef<HTMLElement | null>(null);
   const planRef = useRef<HTMLDivElement | null>(null);
+
+  // Contador persistente de cálculos realizados
+  useEffect(() => {
+    const stored = Number(localStorage.getItem("apex7_calc_count") || "0");
+    if (!Number.isNaN(stored)) setExtraCalcs(stored);
+  }, []);
+
+  const totalCatalogued = CASES.length + extraCalcs;
 
   const recommended = useMemo(() => {
     if (!answers.pain) return [] as RoiCase[];
@@ -130,6 +139,11 @@ function Index() {
 
   const finishDiagnostic = () => {
     setShowResult(true);
+    setExtraCalcs((n) => {
+      const next = n + 1;
+      try { localStorage.setItem("apex7_calc_count", String(next)); } catch {}
+      return next;
+    });
     setTimeout(() => {
       resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
@@ -163,7 +177,7 @@ function Index() {
       <Header onHome={goHome} onStart={startDiagnostic} />
 
       <main className="mx-auto max-w-6xl px-4 sm:px-6 pb-32">
-        <Hero onStart={startDiagnostic} onLibrary={() => smoothScrollTo("biblioteca")} />
+        <Hero onStart={startDiagnostic} onLibrary={() => smoothScrollTo("biblioteca")} totalCases={totalCatalogued} />
 
         {step >= 1 && (
           <section id="diagnostico" className="mt-20 sm:mt-24 scroll-mt-24">
@@ -334,9 +348,9 @@ function Index() {
           <SectionLabel>03 — Biblioteca de ROI</SectionLabel>
           <div className="mt-3 flex items-end justify-between flex-wrap gap-4">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight">
-              {CASES.length} casos calculados.
+              <span className="text-blue-gradient tabular-nums">{totalCatalogued}</span> casos calculados.
               <br />
-              <span className="text-muted-foreground">Externo + interno.</span>
+              <span className="text-muted-foreground">Externo + interno {extraCalcs > 0 && <span className="text-sm font-normal">· +{extraCalcs} pelo seu diagnóstico</span>}.</span>
             </h2>
           </div>
           <Library />
@@ -465,7 +479,7 @@ function Header({ onHome, onStart }: { onHome: () => void; onStart: () => void }
   );
 }
 
-function Hero({ onStart, onLibrary }: { onStart: () => void; onLibrary: () => void }) {
+function Hero({ onStart, onLibrary, totalCases }: { onStart: () => void; onLibrary: () => void; totalCases: number }) {
   return (
     <section className="pt-20 sm:pt-24 md:pt-32 text-center">
       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-secondary/60 text-xs text-muted-foreground">
@@ -496,7 +510,7 @@ function Hero({ onStart, onLibrary }: { onStart: () => void; onLibrary: () => vo
       </div>
       <div className="mt-12 sm:mt-16 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
         {[
-          { k: `${CASES.length}`, v: "casos calculados" },
+          { k: `${totalCases}`, v: "casos calculados" },
           { k: "2 linhas", v: "externo + interno" },
           { k: "ROI", v: "tempo + dinheiro" },
           { k: "Fontes", v: "mercado + diagnóstico" },
