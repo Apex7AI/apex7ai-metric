@@ -2,6 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import logoGif from "@/assets/apex7ai-logo.gif";
 import {
+  ArrowRight,
+  ChevronRight,
+  Clock,
+  CircleDollarSign,
+  Users,
+  Activity,
+  MoveHorizontal,
+} from "lucide-react";
+import {
   CASES,
   PLANS,
   REVENUE_CASES,
@@ -56,7 +65,6 @@ const PAIN_TO_CATEGORIES: Record<PainKey, Category[]> = {
   reunioes: ["operacional"],
 };
 
-// Plano recomendado por economia mensal estimada (BRL)
 const PLAN_THRESHOLDS = [
   { idx: 0, max: 800 },     // Plus
   { idx: 1, max: 3000 },    // Pro
@@ -80,7 +88,6 @@ function Index() {
   const resultRef = useRef<HTMLElement | null>(null);
   const planRef = useRef<HTMLDivElement | null>(null);
 
-  // Contador persistente de cálculos realizados
   useEffect(() => {
     const stored = Number(localStorage.getItem("apex7_calc_count") || "0");
     if (!Number.isNaN(stored)) setExtraCalcs(stored);
@@ -156,7 +163,6 @@ function Index() {
     setTimeout(() => setFlashPlan(false), 3600);
   };
 
-  // Quando o resultado fica visível, sinaliza o plano recomendado
   useEffect(() => {
     if (showResult) {
       const t = setTimeout(() => setFlashPlan(true), 1500);
@@ -207,7 +213,7 @@ function Index() {
                       }}
                       className={`text-left px-4 py-3 rounded-lg border transition ${
                         answers.pain === o.k
-                          ? "border-primary bg-primary/10 text-foreground"
+                          ? "border-primary bg-primary/10 text-foreground shadow-[0_0_15px_rgba(59,130,246,0.2)]"
                           : "border-border bg-card hover:border-primary/50"
                       }`}
                     >
@@ -223,7 +229,7 @@ function Index() {
                   value={answers.segment}
                   onChange={(e) => setAnswers({ ...answers, segment: e.target.value })}
                   placeholder="Ex: agência, contabilidade, clínica…"
-                  className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                  className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 transition"
                 />
                 <div className="mt-3 flex flex-wrap gap-2">
                   {["Agência", "Contabilidade", "Clínica", "Imobiliária", "Consultoria", "Coworking"].map((s) => (
@@ -239,25 +245,46 @@ function Index() {
               </QuestionCard>
 
               <QuestionCard title="3. Volume mensal do gargalo">
-                <SliderRow label="Tarefas / mês" value={answers.volume} min={10} max={500} step={10} suffix=""
-                  onChange={(v) => setAnswers({ ...answers, volume: v })} />
-                <SliderRow label="Tempo manual por tarefa" value={answers.manualMin} min={2} max={240} step={1} suffix=" min"
-                  onChange={(v) => setAnswers({ ...answers, manualMin: v })} />
+                <SliderRow 
+                  icon={<Activity className="w-4 h-4 text-primary" />}
+                  label="Tarefas / mês" 
+                  value={answers.volume} 
+                  min={10} max={500} step={10} suffix=""
+                  onChange={(v) => setAnswers({ ...answers, volume: v })} 
+                />
+                <SliderRow 
+                  icon={<Clock className="w-4 h-4 text-primary" />}
+                  label="Tempo manual por tarefa" 
+                  value={answers.manualMin} 
+                  min={2} max={240} step={1} suffix=" min"
+                  onChange={(v) => setAnswers({ ...answers, manualMin: v })} 
+                />
               </QuestionCard>
 
               <QuestionCard title="4. Custo da hora e tamanho do time">
-                <SliderRow label="Custo / hora (R$)" value={answers.costHour} min={20} max={150} step={1} suffix=""
-                  onChange={(v) => setAnswers({ ...answers, costHour: v })} />
-                <SliderRow label="Tamanho do time" value={answers.teamSize} min={1} max={50} step={1} suffix=" pessoas"
-                  onChange={(v) => setAnswers({ ...answers, teamSize: v })} />
+                <SliderRow 
+                  icon={<CircleDollarSign className="w-4 h-4 text-primary" />}
+                  label="Custo / hora (R$)" 
+                  value={answers.costHour} 
+                  min={20} max={150} step={1} suffix=""
+                  onChange={(v) => setAnswers({ ...answers, costHour: v })} 
+                />
+                <SliderRow 
+                  icon={<Users className="w-4 h-4 text-primary" />}
+                  label="Tamanho do time" 
+                  value={answers.teamSize} 
+                  min={1} max={50} step={1} suffix=" pessoas"
+                  onChange={(v) => setAnswers({ ...answers, teamSize: v })} 
+                />
               </QuestionCard>
             </div>
 
             <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 justify-between">
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                <div className={`h-2 w-2 rounded-full ${answersComplete ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-orange-500 animate-pulse'}`} />
                 {answersComplete
                   ? "Tudo pronto — veja seu resultado."
-                  : "Selecione um gargalo e informe o segmento para liberar o resultado."}
+                  : "Preencha os campos para liberar o resultado."}
               </div>
               <div className="flex gap-2">
                 <button
@@ -269,9 +296,10 @@ function Index() {
                 <button
                   onClick={finishDiagnostic}
                   disabled={!answersComplete}
-                  className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition glow disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition glow disabled:opacity-40 disabled:cursor-not-allowed group flex items-center gap-2"
                 >
-                  Ver meu resultado →
+                  Ver meu resultado 
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
             </div>
@@ -536,31 +564,45 @@ function SectionLabel({ children, className = "" }: { children: React.ReactNode;
 
 function QuestionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 card-elev">
-      <div className="text-sm font-medium text-foreground/90 mb-4">{title}</div>
+    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 card-elev relative overflow-hidden group">
+      <div className="text-sm font-medium text-foreground/90 mb-6 flex items-center gap-2">
+        <ChevronRight className="w-4 h-4 text-primary" />
+        {title}
+      </div>
       {children}
     </div>
   );
 }
 
 function SliderRow({
-  label, value, min, max, step, suffix, onChange,
+  icon, label, value, min, max, step, suffix, onChange,
 }: {
-  label: string; value: number; min: number; max: number; step: number; suffix: string;
+  icon?: React.ReactNode; label: string; value: number; min: number; max: number; step: number; suffix: string;
   onChange: (v: number) => void;
 }) {
   return (
-    <div className="mb-4 last:mb-0">
-      <div className="flex justify-between text-xs text-muted-foreground mb-2">
-        <span>{label}</span>
-        <span className="text-foreground font-medium tabular-nums">{value}{suffix}</span>
+    <div className="mb-6 last:mb-0 group/slider">
+      <div className="flex justify-between text-xs text-muted-foreground mb-3 items-center">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span>{label}</span>
+        </div>
+        <span className="text-primary font-bold tabular-nums px-2 py-1 rounded bg-primary/10 border border-primary/20">
+          {value}{suffix}
+        </span>
       </div>
-      <input
-        type="range"
-        min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-[var(--primary)]"
-      />
+      <div className="relative flex items-center">
+        <input
+          type="range"
+          min={min} max={max} step={step} value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="slider-modern w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none"
+        />
+      </div>
+      <div className="flex justify-between mt-2 px-1">
+        <span className="text-[10px] text-muted-foreground/50">{min}{suffix}</span>
+        <span className="text-[10px] text-muted-foreground/50">{max}{suffix}</span>
+      </div>
     </div>
   );
 }
@@ -577,12 +619,12 @@ function StatCard({ label, value, sub, highlight = false }: { label: string; val
 
 function CaseCard({ c }: { c: RoiCase }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 card-elev hover:border-primary/50 transition">
+    <div className="rounded-2xl border border-border bg-card p-6 card-elev hover:border-primary/50 transition group">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest text-primary">{c.area}</span>
-        <span className="text-[10px] text-muted-foreground">{percentReduction(c)}% menos tempo</span>
+        <span className="text-[10px] uppercase tracking-widest text-primary font-bold">{c.area}</span>
+        <span className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">{percentReduction(c)}% menos tempo</span>
       </div>
-      <div className="mt-3 text-lg font-medium leading-snug">{c.flow}</div>
+      <div className="mt-3 text-lg font-medium leading-snug group-hover:text-primary transition-colors">{c.flow}</div>
       <p className="mt-2 text-xs text-muted-foreground">{c.scenario}</p>
       <div className="mt-5 pt-4 border-t border-border grid grid-cols-3 gap-2 text-center">
         <div>
@@ -612,8 +654,8 @@ function Library() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-5 py-1.5 rounded-full text-sm transition ${
-              tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            className={`px-5 py-1.5 rounded-full text-sm transition font-medium ${
+              tab === t ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {t} ({CASES.filter(c => c.area === t).length})
