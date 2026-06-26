@@ -34,6 +34,10 @@ export const CASES: RoiCase[] = [
   { area: "External", flow: "Ad creative pack", scenario: "30 variations/month • 25min manual • 5min with Lynx", volumeMonthly: 30, manualMin: 25, agentMin: 5, costHour: 35, categories: ["conteudo"] },
   { area: "External", flow: "Local market research", scenario: "2 surveys/month • 10h manual • 2h with Lynx", volumeMonthly: 2, manualMin: 600, agentMin: 120, costHour: 50, categories: ["operacional"] },
   { area: "External", flow: "Tool benchmarking", scenario: "4 comparisons/month • 3h manual • 30min with Lynx", volumeMonthly: 4, manualMin: 180, agentMin: 30, costHour: 45, categories: ["operacional"] },
+  { area: "External", flow: "Slide decks & presentations", scenario: "12 decks/month • 3h manual • 40min with Lynx", volumeMonthly: 12, manualMin: 180, agentMin: 40, costHour: 45, categories: ["conteudo"] },
+  { area: "External", flow: "Real-time dashboards", scenario: "4 dashboards/month • 8h manual • 1h30 with Lynx", volumeMonthly: 4, manualMin: 480, agentMin: 90, costHour: 55, categories: ["operacional", "receita"] },
+  { area: "External", flow: "Custom AI agent builder", scenario: "5 agents/month • 6h manual • 1h with Lynx + 1k+ tools", volumeMonthly: 5, manualMin: 360, agentMin: 60, costHour: 60, categories: ["receita", "operacional"] },
+  { area: "External", flow: "No-code workflow automation", scenario: "10 workflows/month • 4h manual • 45min with Lynx", volumeMonthly: 10, manualMin: 240, agentMin: 45, costHour: 50, categories: ["operacional", "backoffice"] },
   // INTERNAL
   { area: "Internal", flow: "Quick lead response", scenario: "100 leads/month • 15min manual • 2min with Lynx", volumeMonthly: 100, manualMin: 15, agentMin: 2, costHour: 32, categories: ["comercial", "receita"] },
   { area: "Internal", flow: "Sales follow-up", scenario: "150 follow-ups/month • 10min manual • 1min with Lynx", volumeMonthly: 150, manualMin: 10, agentMin: 1, costHour: 32, categories: ["comercial", "receita"] },
@@ -46,6 +50,8 @@ export const CASES: RoiCase[] = [
   { area: "Internal", flow: "Smart scheduling", scenario: "50 appointments/month • 8min manual • 2min with Lynx", volumeMonthly: 50, manualMin: 8, agentMin: 2, costHour: 28, categories: ["operacional"] },
   { area: "Internal", flow: "Client onboarding", scenario: "10 onboardings/month • 2h manual • 30min with Lynx", volumeMonthly: 10, manualMin: 120, agentMin: 30, costHour: 40, categories: ["operacional", "backoffice"] },
   { area: "Internal", flow: "Internal knowledge base", scenario: "10 people • 20min/day searching • reduces 50%", volumeMonthly: 10 * 22, manualMin: 20, agentMin: 10, costHour: 35, categories: ["operacional"] },
+  { area: "Internal", flow: "Email automation sequences", scenario: "5 sequences/month • 3h manual • 30min with Lynx", volumeMonthly: 5, manualMin: 180, agentMin: 30, costHour: 40, categories: ["operacional", "comercial"] },
+  { area: "Internal", flow: "Slack / team notifications", scenario: "30 alerts/month • 20min manual • 2min with Lynx", volumeMonthly: 30, manualMin: 20, agentMin: 2, costHour: 35, categories: ["operacional"] },
 ];
 
 export interface RevenueCase {
