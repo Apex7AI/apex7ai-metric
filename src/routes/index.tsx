@@ -72,7 +72,7 @@ const PLAN_THRESHOLDS = [
   { idx: 3, max: Infinity } // Custom
 ];
 
-const PLATFORM_URL = "https://lynx.apexai.com/auth";
+const PLATFORM_URL = "https://lynx.apex7ai.com/auth";
 
 function smoothScrollTo(id: string) {
   const el = document.getElementById(id);
@@ -380,6 +380,11 @@ function Index() {
                   Get started with {PLANS[recommendedPlanIdx].name} →
                 </a>
               </div>
+              <div className="mt-4 text-xs text-muted-foreground inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/5 px-4 py-1.5">
+                <span className="text-yellow-400 font-semibold">LAUNCH30</span>
+                <span className="text-muted-foreground/70">·</span>
+                <span>30% OFF — launch offer</span>
+              </div>
             </div>
           </section>
         )}
@@ -455,6 +460,9 @@ function Index() {
                   >
                     Choose {p.name} →
                   </a>
+                  <div className="mt-2 text-[10px] text-center text-yellow-400/80">
+                    Use <span className="font-semibold">LAUNCH30</span> for 30% OFF
+                  </div>
                 </div>
               );
             })}
@@ -484,6 +492,11 @@ function Index() {
             >
               Go to Lynx Agent →
             </a>
+          </div>
+          <div className="mt-6 text-xs text-muted-foreground inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/5 px-4 py-1.5">
+            <span className="text-yellow-400 font-semibold">LAUNCH30</span>
+            <span className="text-muted-foreground/70">·</span>
+            <span>30% OFF — launch offer</span>
           </div>
         </section>
 
@@ -583,6 +596,11 @@ function Hero({ onStart, onLibrary, totalCases }: { onStart: () => void; onLibra
         >
           Try Lynx Agent →
         </a>
+      </div>
+      <div className="mt-4 text-xs text-muted-foreground inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/5 px-4 py-1.5">
+        <span className="text-yellow-400 font-semibold">LAUNCH30</span>
+        <span className="text-muted-foreground/70">·</span>
+        <span>30% OFF — launch offer</span>
       </div>
       <div className="mt-12 sm:mt-16 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
         {[
