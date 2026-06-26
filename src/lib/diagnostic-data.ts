@@ -20,7 +20,7 @@ export const percentReduction = (c: RoiCase) =>
   Math.round(((c.manualMin - c.agentMin) / c.manualMin) * 100);
 
 export const usd = (n: number) =>
-  n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  `$${n.toLocaleString("de-DE", { maximumFractionDigits: 0 })}`;
 
 export const CASES: RoiCase[] = [
   // EXTERNAL
