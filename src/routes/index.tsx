@@ -37,7 +37,7 @@ export const Route = createFileRoute("/")({
   }),
 });
 
-type PainKey = "leads" | "docs" | "vendas" | "conteudo" | "reunioes";
+type PainKey = "leads" | "docs" | "vendas" | "conteudo" | "reunioes" | "dev" | "project";
 
 interface Answers {
   pain: PainKey | null;
@@ -63,6 +63,8 @@ const PAIN_TO_CATEGORIES: Record<PainKey, Category[]> = {
   vendas: ["receita", "comercial"],
   conteudo: ["conteudo"],
   reunioes: ["operacional"],
+  dev: ["operacional", "receita"],
+  project: ["operacional", "backoffice"],
 };
 
 const PLAN_THRESHOLDS = [
@@ -206,6 +208,8 @@ function Index() {
                     { k: "vendas", label: "Need to sell more" },
                     { k: "conteudo", label: "Content & marketing" },
                     { k: "reunioes", label: "Meetings & reports" },
+                    { k: "dev", label: "Dev & technical tasks" },
+                    { k: "project", label: "Project management" },
                   ].map((o) => (
                     <button
                       key={o.k}
@@ -234,7 +238,7 @@ function Index() {
                   className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 transition"
                 />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {["Agency", "Accounting", "Clinic", "Real Estate", "Consulting", "Coworking"].map((s) => (
+                  {["Agency", "Accounting", "Clinic", "Real Estate", "Consulting", "Coworking", "Developer / Freelancer", "Startup", "E-commerce", "Law Firm", "Education"].map((s) => (
                     <button
                       key={s}
                       onClick={() => setAnswers({ ...answers, segment: s })}
