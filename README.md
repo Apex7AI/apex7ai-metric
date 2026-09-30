@@ -5,6 +5,7 @@ Calculadora operacional inteligente desenvolvida para diagnosticar gargalos, est
 ![Apex7AI Logo](./src/assets/apex7ai-logo.gif)
 
 ## 🚀 Tecnologias
+
 - **Framework:** [TanStack Start](https://tanstack.com/router/latest/docs/framework/react/start/overview) (React 19 + TypeScript)
 - **Styling:** Tailwind CSS 4
 - **Routing:** TanStack Router
@@ -12,6 +13,7 @@ Calculadora operacional inteligente desenvolvida para diagnosticar gargalos, est
 - **Deploy:** Docker (Easypanel) em modo SPA
 
 ## 📊 Funcionalidades
+
 - **Diagnóstico em 4 Etapas:** Identificação de nicho, gargalo e volume operacional.
 - **Cálculo de ROI em tempo real:** Fórmulas dinâmicas de economia mensal e anual.
 - **Biblioteca de Casos de Uso:** Exemplos reais de automação com integração (Notion, Slack, CRM, Gmail).
@@ -20,24 +22,31 @@ Calculadora operacional inteligente desenvolvida para diagnosticar gargalos, est
 ## 🛠️ Como rodar localmente
 
 1. Instale o [Bun](https://bun.sh/):
+
 ```bash
 curl -fsSL https://bun.sh/install | bash
 ```
 
 2. Instale as dependências:
+
 ```bash
 bun install
 ```
 
 3. Inicie o servidor de desenvolvimento:
+
 ```bash
 bun run dev
 ```
 
 ## 📦 Deploy
+
 O projeto está configurado para deploy via Docker. O arquivo `Dockerfile` na raiz gerencia a compilação e o serviço dos arquivos estáticos via `serve`.
 
 Para mais detalhes sobre o deploy na VPS, veja [DEPLOY.md](./DEPLOY.md).
 
+Para entender a arquitetura, visualizar mudanças localmente, criar pontos de retorno e trabalhar com segurança, veja [GUIA_PROJETO.md](./GUIA_PROJETO.md).
+
 ---
+
 Desenvolvido por **Apex7AI**.
