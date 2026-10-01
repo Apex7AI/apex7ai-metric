@@ -115,6 +115,22 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (window.location.hostname === 'lynxmetric.apex7ai.com') {
+                window.dataLayer = window.dataLayer || [];
+                window.gtag = function(){window.dataLayer.push(arguments);};
+                var analyticsScript = document.createElement('script');
+                analyticsScript.async = true;
+                analyticsScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-6ETJFB3PT3';
+                document.head.appendChild(analyticsScript);
+                window.gtag('js', new Date());
+                window.gtag('config', 'G-6ETJFB3PT3', { anonymize_ip: true });
+              }
+            `,
+          }}
+        />
       </head>
       <body>
         {children}

@@ -5,24 +5,30 @@ import {
   Activity,
   ArrowRight,
   Briefcase,
+  Building2,
+  CalendarDays,
   Check,
   ChevronRight,
   CircleDollarSign,
   Clock,
   Code2,
   Copy,
+  Download,
   ExternalLink,
   FileText,
   Globe2,
   Headphones,
   Megaphone,
   Search,
+  Share2,
   Settings,
   ShieldCheck,
   Sparkles,
   Target,
   Users,
+  X,
 } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 import {
   CASES,
   REVENUE_CASES,
@@ -97,6 +103,32 @@ const PLAN_HOUR_THRESHOLDS = [
 ];
 
 const PLATFORM_URL = "https://lynx.apex7ai.com/auth";
+const TALLY_FORM_ID = "zxvPzR";
+const TALLY_FORM_URL = `https://tally.so/r/${TALLY_FORM_ID}`;
+const CALENDAR_URL = "https://calendar.app.google/D7ba1qfmg8gq71fu5";
+
+interface Attribution {
+  source: string;
+  medium: string;
+  campaign: string;
+}
+
+const DEFAULT_ATTRIBUTION: Attribution = {
+  source: "direct",
+  medium: "website",
+  campaign: "lynxmetric",
+};
+
+function boundedNumber(
+  params: URLSearchParams,
+  key: string,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  const value = Number(params.get(key));
+  return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
 
 function smoothScrollTo(id: string) {
   const el = document.getElementById(id);
@@ -130,23 +162,67 @@ function Index() {
   const [answers, setAnswers] = useState<Answers>(INITIAL_ANSWERS);
   const [showResult, setShowResult] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [leadFormOpen, setLeadFormOpen] = useState(false);
   const [promptDraft, setPromptDraft] = useState("");
+  const [attribution, setAttribution] = useState<Attribution>(DEFAULT_ATTRIBUTION);
   const resultRef = useRef<HTMLElement | null>(null);
   const planRef = useRef<HTMLDivElement | null>(null);
   const copy = getCopy(locale);
   const plans = getLocalizedPlans(locale);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
     const storedLocale = localStorage.getItem("apex7_locale");
+    const queryLocale = params.get("lang");
     const initialLocale: Locale =
-      storedLocale === "en" || storedLocale === "pt"
+      queryLocale === "en" || queryLocale === "pt"
+        ? queryLocale
+        : storedLocale === "en" || storedLocale === "pt"
         ? storedLocale
         : navigator.language.toLowerCase().startsWith("pt")
           ? "pt"
           : "en";
 
     setLocale(initialLocale);
-    if (initialLocale === "pt") {
+    setAttribution({
+      source: params.get("utm_source") || DEFAULT_ATTRIBUTION.source,
+      medium: params.get("utm_medium") || DEFAULT_ATTRIBUTION.medium,
+      campaign: params.get("utm_campaign") || DEFAULT_ATTRIBUTION.campaign,
+    });
+
+    const sharedTask = params.get("result") === "1" ? getWorkflowTask(params.get("task")) : null;
+    if (sharedTask) {
+      const sharedCurrency: Currency = params.get("currency") === "BRL" ? "BRL" : "USD";
+      setAnswers({
+        categoryId: sharedTask.categoryId,
+        taskId: sharedTask.id,
+        segment: "",
+        volume: boundedNumber(params, "volume", sharedTask.defaultVolume, 1, 500),
+        costHour: boundedNumber(
+          params,
+          "cost_hour",
+          sharedCurrency === "BRL" ? 60 : 35,
+          10,
+          500,
+        ),
+        manualMin: boundedNumber(
+          params,
+          "manual_min",
+          sharedTask.defaultManualMin,
+          2,
+          600,
+        ),
+        teamSize: boundedNumber(params, "team_size", 3, 1, 50),
+        currency: sharedCurrency,
+      });
+      setStarted(true);
+      setShowResult(true);
+      setTimeout(
+        () => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        160,
+      );
+    } else if (initialLocale === "pt") {
       setAnswers((current) => ({ ...current, currency: "BRL", costHour: 60 }));
     }
   }, []);
@@ -158,6 +234,23 @@ function Index() {
       .querySelector('meta[name="description"]')
       ?.setAttribute("content", copy.pageDescription);
   }, [copy.pageDescription, copy.pageTitle, locale]);
+
+  useEffect(() => {
+    if (!leadFormOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLeadFormOpen(false);
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [leadFormOpen]);
 
   const selectedCategory = getWorkflowCategory(answers.categoryId);
   const selectedTask = getWorkflowTask(answers.taskId);
@@ -223,27 +316,105 @@ function Index() {
     return match?.idx ?? 0;
   }, [metrics.timeMin]);
 
+  const tallyParams = useMemo(() => {
+    if (!selectedTask || !selectedCategory) return new URLSearchParams();
+
+    return new URLSearchParams({
+      source: attribution.source,
+      medium: attribution.medium,
+      campaign: attribution.campaign,
+      locale,
+      category: selectedCategory.id,
+      category_label: localize(selectedCategory.title, locale),
+      task: selectedTask.id,
+      task_label: localize(selectedTask.title, locale),
+      workflow_id: selectedTask.id,
+      volume: String(answers.volume),
+      manual_minutes: String(answers.manualMin),
+      team_size: String(answers.teamSize),
+      currency: answers.currency,
+      opportunity_score: String(metrics.score),
+      manual_hours: metrics.manualHours.toFixed(1),
+      hours_low: metrics.timeMin.toFixed(1),
+      hours_high: metrics.timeMax.toFixed(1),
+      savings_low: Math.round(metrics.savingsMin).toString(),
+      savings_high: Math.round(metrics.savingsMax).toString(),
+      recommended_plan: plans[recommendedPlanIdx]?.name ?? "Free",
+    });
+  }, [
+    answers.currency,
+    answers.manualMin,
+    answers.teamSize,
+    answers.volume,
+    attribution.campaign,
+    attribution.medium,
+    attribution.source,
+    locale,
+    metrics.manualHours,
+    metrics.savingsMax,
+    metrics.savingsMin,
+    metrics.score,
+    metrics.timeMax,
+    metrics.timeMin,
+    plans,
+    recommendedPlanIdx,
+    selectedCategory,
+    selectedTask,
+  ]);
+
+  const tallyUrl = useMemo(() => {
+    const query = tallyParams.toString();
+    return query ? `${TALLY_FORM_URL}?${query}` : TALLY_FORM_URL;
+  }, [tallyParams]);
+
+  const tallyEmbedUrl = useMemo(() => {
+    const params = new URLSearchParams(tallyParams);
+    params.set("alignLeft", "1");
+    params.set("hideTitle", "1");
+    params.set("transparentBackground", "1");
+    params.set("dynamicHeight", "1");
+    return `https://tally.so/embed/${TALLY_FORM_ID}?${params.toString()}`;
+  }, [tallyParams]);
+
   const answersComplete = !!selectedCategory && !!selectedTask;
 
   const startDiagnostic = () => {
+    trackEvent("diagnostic_started", {
+      locale,
+      source: attribution.source,
+      campaign: attribution.campaign,
+    });
     setStarted(true);
     setAnswers(
       locale === "pt" ? { ...INITIAL_ANSWERS, currency: "BRL", costHour: 60 } : INITIAL_ANSWERS,
     );
     setShowResult(false);
     setCopied(false);
+    setShareCopied(false);
     setTimeout(() => smoothScrollTo("diagnostico"), 60);
   };
 
-  const chooseCategory = (categoryId: WorkflowCategoryId, shouldScroll = false) => {
+  const chooseCategory = (categoryId: WorkflowCategoryId) => {
+    trackEvent("category_selected", {
+      category_id: categoryId,
+      locale,
+      source: attribution.source,
+    });
     setStarted(true);
     setAnswers((current) => ({ ...current, categoryId, taskId: null }));
     setShowResult(false);
     setCopied(false);
-    if (shouldScroll) setTimeout(() => smoothScrollTo("diagnostico"), 60);
+    setShareCopied(false);
+    setTimeout(() => smoothScrollTo("diagnostic-task"), 120);
   };
 
   const chooseTask = (task: WorkflowTask) => {
+    trackEvent("task_selected", {
+      category_id: task.categoryId,
+      task_id: task.id,
+      locale,
+      source: attribution.source,
+    });
     setAnswers((current) => ({
       ...current,
       categoryId: task.categoryId,
@@ -253,10 +424,22 @@ function Index() {
     }));
     setShowResult(false);
     setCopied(false);
+    setShareCopied(false);
+    setTimeout(() => smoothScrollTo("diagnostic-details"), 120);
   };
 
   const finishDiagnostic = () => {
     if (!answersComplete) return;
+    trackEvent("diagnostic_completed", {
+      category_id: selectedCategory?.id,
+      task_id: selectedTask?.id,
+      locale,
+      currency: answers.currency,
+      opportunity_score: metrics.score,
+      team_size: answers.teamSize,
+      source: attribution.source,
+      campaign: attribution.campaign,
+    });
     setShowResult(true);
     setCopied(false);
     setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
@@ -264,10 +447,9 @@ function Index() {
 
   const selectRelatedTask = (task: WorkflowTask) => {
     chooseTask(task);
-    setTimeout(() => smoothScrollTo("diagnostico"), 60);
   };
 
-  const copyPrompt = async () => {
+  const copyPrompt = async (origin: "button" | "lynx" = "button") => {
     try {
       await navigator.clipboard.writeText(promptDraft);
     } catch {
@@ -280,8 +462,105 @@ function Index() {
       document.execCommand("copy");
       textarea.remove();
     }
+    trackEvent("prompt_copied", {
+      category_id: selectedCategory?.id,
+      task_id: selectedTask?.id,
+      locale,
+      origin,
+    });
     setCopied(true);
     setTimeout(() => setCopied(false), 2200);
+  };
+
+  const runInLynx = async () => {
+    window.open(PLATFORM_URL, "_blank", "noopener,noreferrer");
+    await copyPrompt("lynx");
+    trackEvent("lynx_clicked", {
+      category_id: selectedCategory?.id,
+      task_id: selectedTask?.id,
+      locale,
+      opportunity_score: metrics.score,
+    });
+  };
+
+  const buildShareUrl = () => {
+    if (!selectedTask) return window.location.href;
+
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set("result", "1");
+    url.searchParams.set("lang", locale);
+    url.searchParams.set("task", selectedTask.id);
+    url.searchParams.set("volume", String(answers.volume));
+    url.searchParams.set("manual_min", String(answers.manualMin));
+    url.searchParams.set("cost_hour", String(answers.costHour));
+    url.searchParams.set("team_size", String(answers.teamSize));
+    url.searchParams.set("currency", answers.currency);
+    url.searchParams.set("utm_source", "shared_result");
+    url.searchParams.set("utm_medium", "share");
+    url.searchParams.set("utm_campaign", attribution.campaign);
+    return url.toString();
+  };
+
+  const shareResult = async () => {
+    const shareUrl = buildShareUrl();
+    const shareData = {
+      title: copy.pageTitle,
+      text:
+        locale === "pt"
+          ? `Meu diagnóstico LynxMetric: ${localize(selectedTask?.title ?? { en: "", pt: "" }, locale)}.`
+          : `My LynxMetric diagnostic: ${localize(selectedTask?.title ?? { en: "", pt: "" }, locale)}.`,
+      url: shareUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2400);
+      }
+      trackEvent("result_shared", {
+        category_id: selectedCategory?.id,
+        task_id: selectedTask?.id,
+        locale,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2400);
+    }
+  };
+
+  const printResult = () => {
+    trackEvent("result_pdf_clicked", {
+      category_id: selectedCategory?.id,
+      task_id: selectedTask?.id,
+      locale,
+    });
+    window.print();
+  };
+
+  const openLeadForm = () => {
+    trackEvent("lead_form_opened", {
+      category_id: selectedCategory?.id,
+      task_id: selectedTask?.id,
+      locale,
+      opportunity_score: metrics.score,
+      source: attribution.source,
+    });
+    setLeadFormOpen(true);
+  };
+
+  const trackMeetingClick = () => {
+    trackEvent("meeting_clicked", {
+      category_id: selectedCategory?.id,
+      task_id: selectedTask?.id,
+      locale,
+      opportunity_score: metrics.score,
+      source: attribution.source,
+    });
   };
 
   const changeLocale = (nextLocale: Locale) => {
@@ -318,6 +597,7 @@ function Index() {
     }
     setLocale(nextLocale);
     localStorage.setItem("apex7_locale", nextLocale);
+    trackEvent("language_changed", { locale: nextLocale });
   };
 
   const goHome = () => {
@@ -359,6 +639,80 @@ function Index() {
             </h2>
             <p className="mt-3 max-w-3xl text-muted-foreground">{copy.diagnosticBody}</p>
 
+            <div
+              className="mt-6 rounded-2xl border border-primary/30 bg-primary/5 p-4 sm:p-5"
+              aria-live="polite"
+            >
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div className="text-sm font-medium">{copy.progressTitle}</div>
+                <div className="text-xs text-muted-foreground">{copy.progressHint}</div>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    step: "1",
+                    label: copy.progressArea,
+                    value: selectedCategory
+                      ? localize(selectedCategory.title, locale)
+                      : copy.pendingChoice,
+                    complete: !!selectedCategory,
+                  },
+                  {
+                    step: "2",
+                    label: copy.progressTask,
+                    value: selectedTask ? localize(selectedTask.title, locale) : copy.pendingChoice,
+                    complete: !!selectedTask,
+                  },
+                  {
+                    step: "3",
+                    label: copy.progressVolume,
+                    value: selectedTask
+                      ? `${answers.volume} ${localize(selectedTask.unit, locale)} · ${answers.manualMin}${copy.minuteSuffix}`
+                      : copy.pendingChoice,
+                    complete: !!selectedTask,
+                  },
+                  {
+                    step: "4",
+                    label: copy.progressContext,
+                    value: selectedTask
+                      ? `${formatMoney(answers.costHour, answers.currency, locale)}/h · ${answers.teamSize}${copy.peopleSuffix}`
+                      : copy.pendingChoice,
+                    complete: !!selectedTask,
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.step}
+                    className={`rounded-xl border p-3 ${
+                      item.complete
+                        ? "border-primary/30 bg-background/60"
+                        : "border-border bg-background/30"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <span
+                        className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${
+                          item.complete
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-secondary text-muted-foreground"
+                        }`}
+                      >
+                        {item.complete ? <Check className="h-3 w-3" /> : item.step}
+                      </span>
+                      {item.label}
+                    </div>
+                    <div
+                      className={`mt-2 truncate text-xs font-medium ${
+                        item.complete ? "text-foreground" : "text-muted-foreground"
+                      }`}
+                      title={item.value}
+                    >
+                      {item.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="mt-8 sm:mt-10">
               <QuestionCard title={copy.questionArea}>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -388,7 +742,7 @@ function Index() {
               </QuestionCard>
             </div>
 
-            <div className="mt-5">
+            <div id="diagnostic-task" className="mt-5 scroll-mt-24">
               <QuestionCard title={copy.questionTask}>
                 {selectedCategory ? (
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -426,7 +780,7 @@ function Index() {
             </div>
 
             {selectedTask && (
-              <div className="mt-5 grid md:grid-cols-2 gap-5">
+              <div id="diagnostic-details" className="mt-5 grid scroll-mt-24 md:grid-cols-2 gap-5">
                 <QuestionCard title={copy.questionVolume}>
                   <SliderRow
                     icon={<Activity className="w-4 h-4 text-primary" />}
@@ -600,6 +954,29 @@ function Index() {
             </h2>
             <p className="mt-3 max-w-3xl text-muted-foreground">{copy.resultBody}</p>
 
+            <div className="no-print mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={shareResult}
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-4 py-2 text-xs font-medium text-foreground hover:border-primary/60 transition"
+              >
+                {shareCopied ? <Check className="h-4 w-4 text-green-400" /> : <Share2 className="h-4 w-4" />}
+                {shareCopied ? copy.shareCopied : copy.shareResult}
+              </button>
+              <button
+                type="button"
+                onClick={printResult}
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-4 py-2 text-xs font-medium text-foreground hover:border-primary/60 transition"
+              >
+                <Download className="h-4 w-4" />
+                {copy.savePdf}
+              </button>
+            </div>
+            <p className="no-print mt-3 flex max-w-2xl items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+              <Download className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+              {copy.pdfHelp}
+            </p>
+
             <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
                 label={copy.currentEffort}
@@ -716,23 +1093,76 @@ function Index() {
               <div className="mt-4 flex flex-col sm:flex-row gap-3">
                 <button
                   type="button"
-                  onClick={copyPrompt}
+                  onClick={() => copyPrompt()}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:opacity-90 transition"
                 >
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   {copied ? copy.copied : copy.copyPrompt}
                 </button>
-                <a
-                  href={PLATFORM_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={runInLynx}
                   className="inline-flex items-center justify-center gap-2 rounded-full border border-primary/50 bg-primary/10 px-6 py-3 text-sm font-medium text-primary hover:bg-primary/20 transition"
                 >
                   {copy.runInLynx}
                   <ExternalLink className="h-4 w-4" />
-                </a>
+                </button>
               </div>
               <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{copy.promptTip}</p>
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs text-green-300">
+                <CircleDollarSign className="h-3.5 w-3.5" />
+                {copy.freeCreditNote}
+              </div>
+            </div>
+
+            <div className="no-print mt-8 grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-6 sm:p-7">
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/10 text-green-300">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 text-xl font-semibold">{copy.freeStartTitle}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {copy.freeStartBody}
+                </p>
+                <button
+                  type="button"
+                  onClick={runInLynx}
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:opacity-90 transition"
+                >
+                  {copy.freeStartButton}
+                  <ExternalLink className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-primary/35 bg-primary/5 p-6 sm:p-7">
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 text-xl font-semibold">{copy.businessCtaTitle}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {copy.businessCtaBody}
+                </p>
+                <div className="mt-5 flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={openLeadForm}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:opacity-90 transition"
+                  >
+                    {copy.receiveDiagnostic}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                  <a
+                    href={CALENDAR_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={trackMeetingClick}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-primary/50 bg-primary/10 px-5 py-3 text-sm font-medium text-primary hover:bg-primary/20 transition"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    {copy.scheduleConversation}
+                  </a>
+                </div>
+              </div>
             </div>
 
             <div className="mt-10">
@@ -802,7 +1232,7 @@ function Index() {
             {copy.libraryTitle}
           </h2>
           <p className="mt-3 max-w-3xl text-muted-foreground">{copy.libraryBody}</p>
-          <Library locale={locale} onChooseCategory={(id) => chooseCategory(id, true)} />
+          <Library locale={locale} onChooseCategory={chooseCategory} />
         </section>
 
         <section id="receita" className="mt-24 sm:mt-32 scroll-mt-24">
@@ -906,6 +1336,53 @@ function Index() {
           <div>{copy.footerSources}</div>
         </footer>
       </main>
+
+      {leadFormOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3 sm:p-6 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={() => setLeadFormOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={copy.leadFormTitle}
+            className="relative h-[92vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3 sm:px-5">
+              <div>
+                <div className="text-xs uppercase tracking-widest text-primary">
+                  {copy.businessDiagnostic}
+                </div>
+                <div className="mt-1 text-sm font-medium">{copy.leadFormTitle}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLeadFormOpen(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-secondary text-muted-foreground hover:text-foreground transition"
+                aria-label={copy.closeForm}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <iframe
+              src={tallyEmbedUrl}
+              title={copy.leadFormTitle}
+              className="h-[calc(92vh-66px)] w-full bg-background"
+              loading="lazy"
+            />
+            <a
+              href={tallyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="absolute bottom-3 right-4 rounded-full border border-border bg-background/95 px-3 py-1.5 text-[11px] text-muted-foreground shadow hover:text-foreground transition"
+            >
+              {copy.openFormNewTab} ↗
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

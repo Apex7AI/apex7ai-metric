@@ -22,6 +22,9 @@ Diagnóstico gratuito da Apex7 AI que transforma uma dor operacional em uma esti
 - **Biblioteca categorizada:** os 45 cenários pesquisados continuam disponíveis como referências filtráveis.
 - **Português e inglês:** toda a jornada, as tarefas e os prompts funcionam nos dois idiomas.
 - **Recomendação de plano:** usa o potencial conservador de horas recuperadas.
+- **Resultado compartilhável:** cria um link reproduzível e uma versão limpa para PDF.
+- **Funil empresarial:** abre o Tally com o contexto do diagnóstico e oferece agendamento direto.
+- **Analytics do evento:** mede a jornada do diagnóstico sem enviar nome, e-mail ou empresa ao Google Analytics.
 
 ## 🛠️ Como rodar localmente
 
@@ -50,6 +53,8 @@ O projeto está configurado para deploy via Docker. O arquivo `Dockerfile` na ra
 Para mais detalhes sobre o deploy na VPS, veja [DEPLOY.md](./DEPLOY.md).
 
 Para entender a arquitetura, visualizar mudanças localmente, criar pontos de retorno e trabalhar com segurança, veja [GUIA_PROJETO.md](./GUIA_PROJETO.md).
+
+Para operar o funil no evento, veja [FUNIL_EVENTO.md](./FUNIL_EVENTO.md), [PLAYBOOK_COMERCIAL_STS.md](./PLAYBOOK_COMERCIAL_STS.md) e [OPERACAO_CLIENTES.md](./OPERACAO_CLIENTES.md).
 
 ---
 

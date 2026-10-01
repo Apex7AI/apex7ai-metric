@@ -144,3 +144,48 @@
     transition: all 0.2s;
   }
 }
+
+@media print {
+  :root {
+    --background: white;
+    --foreground: #111827;
+    --card: white;
+    --card-foreground: #111827;
+    --muted-foreground: #4b5563;
+    --border: #d1d5db;
+  }
+
+  body {
+    background: white !important;
+    color: #111827 !important;
+  }
+
+  header,
+  footer,
+  .no-print,
+  main > section:not(#resultado) {
+    display: none !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  #resultado {
+    margin: 0 !important;
+    scroll-margin: 0 !important;
+  }
+
+  #resultado textarea {
+    min-height: 360px;
+    border-color: #d1d5db !important;
+    background: white !important;
+    color: #111827 !important;
+  }
+
+  .card-elev,
+  .glow {
+    box-shadow: none !important;
+  }
+}

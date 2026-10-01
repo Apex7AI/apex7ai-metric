@@ -38,11 +38,15 @@ Ao escrever novos textos, evitar apresentar o Lynx como um sistema que apenas co
 | `src/lib/diagnostic-data.ts`               | Casos pesquisados, categorias, fórmulas de economia, receita potencial e dados-base.        |
 | `src/lib/workflow-data.ts`                 | Oito áreas, quarenta tarefas, faixas de redução, etapas, entregáveis e geração dos prompts. |
 | `src/lib/i18n.ts`                          | Textos em inglês e português, tradução dos casos e formatação localizada.                   |
+| `src/lib/analytics.ts`                     | Eventos anônimos do funil enviados ao Google Analytics.                                     |
 | `src/components/ui/`                       | Componentes visuais reutilizáveis. Não contém as regras do diagnóstico.                     |
 | `src/styles.css`                           | Tema, cores, tipografia, animações e estilos globais.                                       |
 | `src/router.tsx` e `src/routes/__root.tsx` | Inicialização e estrutura de rotas da aplicação.                                            |
 | `Dockerfile`                               | Build de produção e servidor estático utilizado pelo Easypanel.                             |
 | `DEPLOY.md`                                | Informações específicas do deploy no Easypanel.                                             |
+| `FUNIL_EVENTO.md`                          | Tally, campos ocultos, agenda, analytics e leitura da amostra do evento.                     |
+| `PLAYBOOK_COMERCIAL_STS.md`                | Abordagem do estande, reunião, piloto, oferta e objeções comerciais.                         |
+| `OPERACAO_CLIENTES.md`                     | Rotina de aquisição, onboarding, pipeline, e-mails, métricas e sucesso do cliente.           |
 
 ### Fontes de verdade
 
@@ -81,6 +85,27 @@ Mudanças visuais não devem alterar premissas numéricas. Qualquer revisão de 
 - revisão dos casos ambíguos de enriquecimento de CRM e monitoramento de marca;
 - cenário de receita com etapas explícitas de alcance, resposta e conversão.
 
+## 5. O que está preparado na branch do funil do evento
+
+A branch `feature/event-conversion-analytics` adiciona, sem modificar as 40 tarefas nem os 45 cenários pesquisados:
+
+- compartilhamento do resultado por link;
+- impressão e salvamento do diagnóstico como PDF pelo navegador;
+- eventos anônimos no Google Analytics;
+- chamada para testar a Lynx com os US$ 5 do plano Free;
+- formulário Tally aberto dentro do resultado;
+- envio automático do contexto do diagnóstico para campos ocultos do Tally;
+- chamada direta para a agenda do Google;
+- leitura de um resultado compartilhado pela URL;
+- estilos específicos para uma versão limpa de impressão;
+- rolagem guiada de área para tarefa e de tarefa para os campos numéricos;
+- resumo ao vivo das escolhas e dos valores preenchidos no diagnóstico;
+- explicação visível de como salvar o resultado em PDF;
+- distinção explícita entre os 45 cenários fixos e a contagem real de diagnósticos;
+- documentação técnica e comercial do funil do evento.
+
+O Tally ainda precisa receber os campos ocultos listados em `FUNIL_EVENTO.md`. Sem esses campos, o formulário continua abrindo e recebendo respostas, mas não armazena automaticamente o contexto calculado pelo LynxMetric.
+
 ### Fórmula atual do diagnóstico
 
 ```text
@@ -93,7 +118,7 @@ custo potencial recuperado = tempo potencial recuperado × custo/hora informado
 
 O tamanho da equipe serve para compreender a operação e personalizar o prompt. Ele não multiplica novamente um volume que já representa o total da equipe.
 
-## 5. Como visualizar antes de publicar
+## 6. Como visualizar antes de publicar
 
 ### Opção A — Docker, recomendada
 
@@ -136,7 +161,7 @@ bun x tsc --noEmit
 bun run build
 ```
 
-## 6. Fluxo seguro para futuras melhorias
+## 7. Fluxo seguro para futuras melhorias
 
 Não é necessário copiar o projeto para outra pasta. O Git já mantém cada ponto de retorno.
 
@@ -159,7 +184,7 @@ git push -u origin feature/nome-da-melhoria
 
 Após a revisão, a branch pode ser incorporada à `main`. O Easypanel está configurado para publicar mudanças enviadas à `main`.
 
-## 7. Backup e pontos de retorno
+## 8. Backup e pontos de retorno
 
 ### Versão anterior ao seletor de português
 
@@ -224,7 +249,7 @@ Quando `C` for enviado à `main`, o Easypanel fará um novo deploy com o comport
 
 Evite `git reset --hard` na `main`, pois ele reescreve o histórico e aumenta o risco de perda de trabalho.
 
-## 8. Deploy no Easypanel
+## 9. Deploy no Easypanel
 
 O fluxo atual é:
 
@@ -242,7 +267,7 @@ Depois de um push na `main`:
 4. testar inglês e português;
 5. executar um diagnóstico completo.
 
-## 9. Segurança do GitHub
+## 10. Segurança do GitHub
 
 Nunca coloque um token pessoal diretamente na URL do remoto Git.
 
@@ -254,21 +279,21 @@ git remote set-url origin https://github.com/Apex7AI/apex7ai-metric.git
 
 Use o gerenciador de credenciais do sistema ou o GitHub CLI para autenticação. Tokens expostos devem ser revogados e substituídos.
 
-## 10. Próximas melhorias para avaliar
+## 11. Próximas melhorias para avaliar
 
 Esses itens são possibilidades para a próxima etapa e ainda precisam de decisão antes de serem implementados:
 
 - confirmar se a aplicação Lynx aceitará deep link com o prompt já preenchido;
-- validar as faixas de redução com execuções reais e feedback de usuários;
-- adicionar captura empresarial opcional depois do resultado;
-- permitir exportar o diagnóstico em PDF ou compartilhar por link;
-- registrar analytics de área, tarefa, resultado e clique em `Executar na Lynx`;
+- separar tamanho do lote e frequência mensal;
+- adicionar a opção `Outra tarefa` com campo livre;
+- validar as faixas de redução somente depois de obter execuções reais e feedback suficiente;
 - adicionar feedback após a primeira tarefa concluída na plataforma;
 - criar modo de apresentação para eventos e telas de projeção;
 - adicionar uma lista de verificação automática para o deploy;
 - conectar os workflows às demonstrações reais existentes no site da Lynx.
+- otimizar uma cópia da logo animada sem excluir o arquivo original.
 
-## 11. Regra de trabalho para mudanças futuras
+## 12. Regra de trabalho para mudanças futuras
 
 Antes de qualquer implementação:
 
