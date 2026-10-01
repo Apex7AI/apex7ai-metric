@@ -1,14 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import logoGif from "@/assets/apex7ai-logo.gif";
 import {
-  ArrowRight,
-  ChevronRight,
-  Clock,
-  CircleDollarSign,
-  Users,
   Activity,
+  ArrowRight,
+  Briefcase,
+  Check,
+  ChevronRight,
+  CircleDollarSign,
+  Clock,
+  Code2,
+  Copy,
+  ExternalLink,
+  FileText,
   Globe2,
+  Headphones,
+  Megaphone,
+  Search,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Users,
 } from "lucide-react";
 import {
   CASES,
@@ -17,67 +30,70 @@ import {
   monthlySavings,
   percentReduction,
   yearlySavings,
-  type Category,
   type RoiCase,
 } from "@/lib/diagnostic-data";
 import {
-  formatUsd,
   getCopy,
   getLocalizedPlans,
   localizeCase,
   localizeRevenueCase,
   type Locale,
 } from "@/lib/i18n";
+import {
+  WORKFLOW_CATEGORIES,
+  WORKFLOW_TASKS,
+  buildWorkflowPrompt,
+  getLegacyCaseCategory,
+  getWorkflowCategory,
+  getWorkflowTask,
+  localize,
+  type WorkflowCategoryId,
+  type WorkflowTask,
+} from "@/lib/workflow-data";
 
 export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "Apex7AI — Lynx Agent Diagnostic" },
+      { title: "LynxMetric — AI Workflow Diagnostic | Apex7 AI" },
       {
         name: "description",
         content:
-          "Apex7AI operational diagnostic: find out in minutes how many hours and how much money your team can save with Lynx Agent.",
+          "Find the work your team should stop doing manually and get a ready-to-run Lynx workflow.",
       },
     ],
   }),
 });
 
-type PainKey = "leads" | "docs" | "vendas" | "conteudo" | "reunioes" | "dev" | "project";
+type Currency = "BRL" | "USD";
 
 interface Answers {
-  pain: PainKey | null;
+  categoryId: WorkflowCategoryId | null;
+  taskId: string | null;
   segment: string;
   volume: number;
   costHour: number;
   manualMin: number;
   teamSize: number;
+  currency: Currency;
 }
 
 const INITIAL_ANSWERS: Answers = {
-  pain: null,
+  categoryId: null,
+  taskId: null,
   segment: "",
-  volume: 100,
+  volume: 20,
   costHour: 35,
-  manualMin: 15,
+  manualMin: 45,
   teamSize: 3,
+  currency: "USD",
 };
 
-const PAIN_TO_CATEGORIES: Record<PainKey, Category[]> = {
-  leads: ["comercial", "receita"],
-  docs: ["backoffice"],
-  vendas: ["receita", "comercial"],
-  conteudo: ["conteudo"],
-  reunioes: ["operacional"],
-  dev: ["operacional", "receita"],
-  project: ["operacional", "backoffice"],
-};
-
-const PLAN_THRESHOLDS = [
-  { idx: 0, max: 800 }, // Plus
-  { idx: 1, max: 3000 }, // Pro
-  { idx: 2, max: 12000 }, // Ultra
-  { idx: 3, max: Infinity }, // Custom
+const PLAN_HOUR_THRESHOLDS = [
+  { idx: 0, max: 5 },
+  { idx: 1, max: 20 },
+  { idx: 2, max: 60 },
+  { idx: 3, max: Infinity },
 ];
 
 const PLATFORM_URL = "https://lynx.apex7ai.com/auth";
@@ -89,25 +105,49 @@ function smoothScrollTo(id: string) {
   window.scrollTo({ top: y, behavior: "smooth" });
 }
 
+function formatMoney(value: number, currency: Currency, locale: Locale) {
+  return new Intl.NumberFormat(locale === "pt" ? "pt-BR" : "en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatHours(value: number, locale: Locale) {
+  return value.toLocaleString(locale === "pt" ? "pt-BR" : "en-US", {
+    minimumFractionDigits: value < 10 ? 1 : 0,
+    maximumFractionDigits: 1,
+  });
+}
+
+function rangeLabel(min: number, max: number, locale: Locale, suffix = "") {
+  return `${formatHours(min, locale)}–${formatHours(max, locale)}${suffix}`;
+}
+
 function Index() {
   const [locale, setLocale] = useState<Locale>("en");
-  const [step, setStep] = useState(0);
+  const [started, setStarted] = useState(false);
   const [answers, setAnswers] = useState<Answers>(INITIAL_ANSWERS);
   const [showResult, setShowResult] = useState(false);
-  const [flashPlan, setFlashPlan] = useState(false);
-  const [extraCalcs, setExtraCalcs] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [promptDraft, setPromptDraft] = useState("");
   const resultRef = useRef<HTMLElement | null>(null);
   const planRef = useRef<HTMLDivElement | null>(null);
   const copy = getCopy(locale);
   const plans = getLocalizedPlans(locale);
 
   useEffect(() => {
-    const stored = Number(localStorage.getItem("apex7_calc_count") || "0");
-    if (!Number.isNaN(stored)) setExtraCalcs(stored);
-
     const storedLocale = localStorage.getItem("apex7_locale");
-    if (storedLocale === "en" || storedLocale === "pt") {
-      setLocale(storedLocale);
+    const initialLocale: Locale =
+      storedLocale === "en" || storedLocale === "pt"
+        ? storedLocale
+        : navigator.language.toLowerCase().startsWith("pt")
+          ? "pt"
+          : "en";
+
+    setLocale(initialLocale);
+    if (initialLocale === "pt") {
+      setAnswers((current) => ({ ...current, currency: "BRL", costHour: 60 }));
     }
   }, []);
 
@@ -119,99 +159,132 @@ function Index() {
       ?.setAttribute("content", copy.pageDescription);
   }, [copy.pageDescription, copy.pageTitle, locale]);
 
-  const totalCatalogued = CASES.length + extraCalcs;
+  const selectedCategory = getWorkflowCategory(answers.categoryId);
+  const selectedTask = getWorkflowTask(answers.taskId);
+  const categoryTasks = answers.categoryId
+    ? WORKFLOW_TASKS.filter((task) => task.categoryId === answers.categoryId)
+    : [];
 
-  const recommended = useMemo(() => {
-    if (!answers.pain) return [] as RoiCase[];
-    const cats = PAIN_TO_CATEGORIES[answers.pain];
-    return CASES.map((c) => ({
-      c,
-      score: c.categories.filter((cat) => cats.includes(cat)).length,
-    }))
-      .filter((x) => x.score > 0)
-      .sort((a, b) => b.score - a.score || monthlySavings(b.c) - monthlySavings(a.c))
-      .slice(0, 3)
-      .map((x) => x.c);
-  }, [answers.pain]);
+  const metrics = useMemo(() => {
+    if (!selectedTask) {
+      return {
+        manualHours: 0,
+        timeMin: 0,
+        timeMax: 0,
+        savingsMin: 0,
+        savingsMax: 0,
+        lynxMin: 0,
+        lynxMax: 0,
+        score: 0,
+      };
+    }
 
-  const custom = useMemo<RoiCase>(() => {
-    const agentMin = Math.max(1, Math.round(answers.manualMin * 0.18));
+    const manualHours = (answers.volume * answers.manualMin) / 60;
+    const [reductionMin, reductionMax] = selectedTask.reductionRange;
+    const timeMin = manualHours * (reductionMin / 100);
+    const timeMax = manualHours * (reductionMax / 100);
+    const workloadScore = Math.min(100, 35 + manualHours * 2.2);
+    const score = Math.round(selectedTask.fit * 0.72 + workloadScore * 0.28);
+
     return {
-      area: "Internal",
-      flow: copy.customFlow,
-      scenario:
-        locale === "pt"
-          ? `${answers.volume} tarefas/mês • ${answers.manualMin}min manuais • ~${agentMin}min com Lynx`
-          : `${answers.volume} tasks/month • ${answers.manualMin}min manual • ~${agentMin}min with Lynx`,
-      volumeMonthly: answers.volume,
-      manualMin: answers.manualMin,
-      agentMin,
-      costHour: answers.costHour,
-      categories: [],
+      manualHours,
+      timeMin,
+      timeMax,
+      savingsMin: timeMin * answers.costHour,
+      savingsMax: timeMax * answers.costHour,
+      lynxMin: Math.max(1, Math.round(answers.manualMin * (1 - reductionMax / 100))),
+      lynxMax: Math.max(1, Math.round(answers.manualMin * (1 - reductionMin / 100))),
+      score: Math.min(99, score),
     };
-  }, [answers, copy.customFlow, locale]);
+  }, [answers.costHour, answers.manualMin, answers.volume, selectedTask]);
 
-  const totalMonthly =
-    recommended.reduce((s, c) => s + monthlySavings(c), 0) + monthlySavings(custom);
-  const totalHours = recommended.reduce((s, c) => s + hoursSaved(c), 0) + hoursSaved(custom);
+  const relatedTasks = useMemo(() => {
+    if (!selectedTask) return [];
+    return WORKFLOW_TASKS.filter(
+      (task) => task.categoryId === selectedTask.categoryId && task.id !== selectedTask.id,
+    ).slice(0, 3);
+  }, [selectedTask]);
+
+  const generatedPrompt = useMemo(() => {
+    if (!selectedTask) return "";
+    return buildWorkflowPrompt(selectedTask, locale, {
+      volume: answers.volume,
+      segment: answers.segment,
+      teamSize: answers.teamSize,
+    });
+  }, [answers.segment, answers.teamSize, answers.volume, locale, selectedTask]);
+
+  useEffect(() => {
+    if (showResult) setPromptDraft(generatedPrompt);
+  }, [generatedPrompt, showResult]);
 
   const recommendedPlanIdx = useMemo(() => {
-    const t = PLAN_THRESHOLDS.find((p) => totalMonthly < p.max);
-    return t ? t.idx : 0;
-  }, [totalMonthly]);
+    const match = PLAN_HOUR_THRESHOLDS.find((threshold) => metrics.timeMin < threshold.max);
+    return match?.idx ?? 0;
+  }, [metrics.timeMin]);
+
+  const answersComplete = !!selectedCategory && !!selectedTask;
 
   const startDiagnostic = () => {
-    setAnswers(INITIAL_ANSWERS);
-    setStep(1);
+    setStarted(true);
+    setAnswers(
+      locale === "pt" ? { ...INITIAL_ANSWERS, currency: "BRL", costHour: 60 } : INITIAL_ANSWERS,
+    );
     setShowResult(false);
+    setCopied(false);
     setTimeout(() => smoothScrollTo("diagnostico"), 60);
   };
 
-  const goHome = () => {
-    setAnswers(INITIAL_ANSWERS);
-    setStep(0);
+  const chooseCategory = (categoryId: WorkflowCategoryId, shouldScroll = false) => {
+    setStarted(true);
+    setAnswers((current) => ({ ...current, categoryId, taskId: null }));
     setShowResult(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setCopied(false);
+    if (shouldScroll) setTimeout(() => smoothScrollTo("diagnostico"), 60);
+  };
+
+  const chooseTask = (task: WorkflowTask) => {
+    setAnswers((current) => ({
+      ...current,
+      categoryId: task.categoryId,
+      taskId: task.id,
+      volume: task.defaultVolume,
+      manualMin: task.defaultManualMin,
+    }));
+    setShowResult(false);
+    setCopied(false);
   };
 
   const finishDiagnostic = () => {
+    if (!answersComplete) return;
     setShowResult(true);
-    setExtraCalcs((n) => {
-      const next = n + 1;
-      try {
-        localStorage.setItem("apex7_calc_count", String(next));
-      } catch {
-        // The calculation still works when browser storage is unavailable.
-      }
-      return next;
-    });
-    setTimeout(() => {
-      resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
+    setCopied(false);
+    setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   };
 
-  const goToPlan = () => {
-    planRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setFlashPlan(false);
-    setTimeout(() => setFlashPlan(true), 400);
-    setTimeout(() => setFlashPlan(false), 3600);
+  const selectRelatedTask = (task: WorkflowTask) => {
+    chooseTask(task);
+    setTimeout(() => smoothScrollTo("diagnostico"), 60);
   };
 
-  useEffect(() => {
-    if (showResult) {
-      const t = setTimeout(() => setFlashPlan(true), 1500);
-      const t2 = setTimeout(() => setFlashPlan(false), 4500);
-      return () => {
-        clearTimeout(t);
-        clearTimeout(t2);
-      };
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(promptDraft);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = promptDraft;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
     }
-  }, [showResult]);
-
-  const answersComplete = !!answers.pain && answers.segment.trim().length > 0;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2200);
+  };
 
   const changeLocale = (nextLocale: Locale) => {
-    const nextCopy = getCopy(nextLocale);
     const currentSegments: string[] = [
       copy.segmentAgency,
       copy.segmentAccounting,
@@ -225,6 +298,7 @@ function Index() {
       copy.segmentLaw,
       copy.segmentEducation,
     ];
+    const nextCopy = getCopy(nextLocale);
     const nextSegments: string[] = [
       nextCopy.segmentAgency,
       nextCopy.segmentAccounting,
@@ -238,21 +312,18 @@ function Index() {
       nextCopy.segmentLaw,
       nextCopy.segmentEducation,
     ];
-    const selectedSegmentIndex = currentSegments.indexOf(answers.segment);
-
-    if (selectedSegmentIndex >= 0) {
-      setAnswers((current) => ({
-        ...current,
-        segment: nextSegments[selectedSegmentIndex],
-      }));
+    const segmentIndex = currentSegments.indexOf(answers.segment);
+    if (segmentIndex >= 0) {
+      setAnswers((current) => ({ ...current, segment: nextSegments[segmentIndex] }));
     }
-
     setLocale(nextLocale);
-    try {
-      localStorage.setItem("apex7_locale", nextLocale);
-    } catch {
-      // The language switch still works when browser storage is unavailable.
-    }
+    localStorage.setItem("apex7_locale", nextLocale);
+  };
+
+  const goHome = () => {
+    setStarted(false);
+    setShowResult(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -277,290 +348,461 @@ function Index() {
           locale={locale}
           onStart={startDiagnostic}
           onLibrary={() => smoothScrollTo("biblioteca")}
-          totalCases={totalCatalogued}
+          totalCases={CASES.length}
         />
 
-        {step >= 1 && (
+        {started && (
           <section id="diagnostico" className="mt-20 sm:mt-24 scroll-mt-24">
             <SectionLabel>{copy.diagnosticSection}</SectionLabel>
             <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-gradient">
               {copy.diagnosticTitle}
             </h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">{copy.diagnosticBody}</p>
+            <p className="mt-3 max-w-3xl text-muted-foreground">{copy.diagnosticBody}</p>
 
-            <div className="mt-8 sm:mt-10 grid md:grid-cols-2 gap-5 sm:gap-6">
-              <QuestionCard title={copy.questionBottleneck}>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { k: "leads", label: copy.painLeads },
-                    { k: "docs", label: copy.painDocs },
-                    { k: "vendas", label: copy.painSales },
-                    { k: "conteudo", label: copy.painContent },
-                    { k: "reunioes", label: copy.painMeetings },
-                    { k: "dev", label: copy.painDev },
-                    { k: "project", label: copy.painProject },
-                  ].map((o) => (
+            <div className="mt-8 sm:mt-10">
+              <QuestionCard title={copy.questionArea}>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {WORKFLOW_CATEGORIES.map((category) => (
                     <button
-                      key={o.k}
-                      onClick={() => {
-                        setAnswers({ ...answers, pain: o.k as PainKey });
-                        setStep(Math.max(step, 2));
-                      }}
-                      className={`text-left px-4 py-3 rounded-lg border transition ${
-                        answers.pain === o.k
-                          ? "border-primary bg-primary/10 text-foreground shadow-[0_0_15px_rgba(59,130,246,0.2)]"
-                          : "border-border bg-card hover:border-primary/50"
+                      key={category.id}
+                      type="button"
+                      onClick={() => chooseCategory(category.id)}
+                      className={`rounded-xl border p-4 text-left transition min-h-36 ${
+                        answers.categoryId === category.id
+                          ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(59,130,246,0.16)]"
+                          : "border-border bg-secondary/30 hover:border-primary/60 hover:bg-secondary/60"
                       }`}
                     >
-                      <span className="text-sm">{o.label}</span>
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <CategoryIcon id={category.id} className="h-4 w-4" />
+                      </span>
+                      <span className="mt-3 block text-sm font-medium">
+                        {localize(category.title, locale)}
+                      </span>
+                      <span className="mt-1.5 block text-xs leading-relaxed text-muted-foreground">
+                        {localize(category.description, locale)}
+                      </span>
                     </button>
                   ))}
                 </div>
-              </QuestionCard>
-
-              <QuestionCard title={copy.questionSegment}>
-                <input
-                  type="text"
-                  value={answers.segment}
-                  onChange={(e) => setAnswers({ ...answers, segment: e.target.value })}
-                  placeholder={copy.segmentPlaceholder}
-                  className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 transition"
-                />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {[
-                    copy.segmentAgency,
-                    copy.segmentAccounting,
-                    copy.segmentClinic,
-                    copy.segmentRealEstate,
-                    copy.segmentConsulting,
-                    copy.segmentCoworking,
-                    copy.segmentDeveloper,
-                    copy.segmentStartup,
-                    copy.segmentEcommerce,
-                    copy.segmentLaw,
-                    copy.segmentEducation,
-                  ].map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setAnswers({ ...answers, segment: s })}
-                      className="text-xs px-3 py-1.5 rounded-full border border-border bg-secondary hover:border-primary/60 text-muted-foreground hover:text-foreground transition"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </QuestionCard>
-
-              <QuestionCard title={copy.questionVolume}>
-                <SliderRow
-                  icon={<Activity className="w-4 h-4 text-primary" />}
-                  label={copy.tasksMonth}
-                  value={answers.volume}
-                  min={10}
-                  max={500}
-                  step={10}
-                  suffix=""
-                  onChange={(v) => setAnswers({ ...answers, volume: v })}
-                />
-                <SliderRow
-                  icon={<Clock className="w-4 h-4 text-primary" />}
-                  label={copy.manualTime}
-                  value={answers.manualMin}
-                  min={2}
-                  max={240}
-                  step={1}
-                  suffix={copy.minuteSuffix}
-                  onChange={(v) => setAnswers({ ...answers, manualMin: v })}
-                />
-              </QuestionCard>
-
-              <QuestionCard title={copy.questionCost}>
-                <SliderRow
-                  icon={<CircleDollarSign className="w-4 h-4 text-primary" />}
-                  label={copy.costHour}
-                  value={answers.costHour}
-                  min={20}
-                  max={150}
-                  step={1}
-                  suffix=""
-                  onChange={(v) => setAnswers({ ...answers, costHour: v })}
-                />
-                <SliderRow
-                  icon={<Users className="w-4 h-4 text-primary" />}
-                  label={copy.teamSize}
-                  value={answers.teamSize}
-                  min={1}
-                  max={50}
-                  step={1}
-                  suffix={copy.peopleSuffix}
-                  onChange={(v) => setAnswers({ ...answers, teamSize: v })}
-                />
               </QuestionCard>
             </div>
+
+            <div className="mt-5">
+              <QuestionCard title={copy.questionTask}>
+                {selectedCategory ? (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {categoryTasks.map((task) => (
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={() => chooseTask(task)}
+                        className={`rounded-xl border p-4 text-left transition ${
+                          answers.taskId === task.id
+                            ? "border-primary bg-primary/10"
+                            : "border-border bg-secondary/30 hover:border-primary/60"
+                        }`}
+                      >
+                        <span className="flex items-start justify-between gap-3">
+                          <span className="text-sm font-medium leading-snug">
+                            {localize(task.title, locale)}
+                          </span>
+                          {answers.taskId === task.id && (
+                            <Check className="h-4 w-4 shrink-0 text-primary" />
+                          )}
+                        </span>
+                        <span className="mt-2 block text-xs leading-relaxed text-muted-foreground">
+                          {localize(task.description, locale)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border bg-secondary/20 p-8 text-center text-sm text-muted-foreground">
+                    {copy.chooseAreaFirst}
+                  </div>
+                )}
+              </QuestionCard>
+            </div>
+
+            {selectedTask && (
+              <div className="mt-5 grid md:grid-cols-2 gap-5">
+                <QuestionCard title={copy.questionVolume}>
+                  <SliderRow
+                    icon={<Activity className="w-4 h-4 text-primary" />}
+                    label={`${copy.tasksMonth} (${localize(selectedTask.unit, locale)})`}
+                    value={answers.volume}
+                    min={1}
+                    max={500}
+                    step={1}
+                    suffix=""
+                    onChange={(volume) => setAnswers((current) => ({ ...current, volume }))}
+                  />
+                  <SliderRow
+                    icon={<Clock className="w-4 h-4 text-primary" />}
+                    label={copy.manualTime}
+                    value={answers.manualMin}
+                    min={2}
+                    max={600}
+                    step={1}
+                    suffix={copy.minuteSuffix}
+                    onChange={(manualMin) => setAnswers((current) => ({ ...current, manualMin }))}
+                  />
+                  <p className="text-xs text-muted-foreground border-t border-border pt-4">
+                    {copy.volumeHelp}
+                  </p>
+                </QuestionCard>
+
+                <QuestionCard title={copy.questionCost}>
+                  <div className="mb-5 flex items-center justify-between gap-4">
+                    <span className="text-xs text-muted-foreground">{copy.currency}</span>
+                    <div className="inline-flex rounded-full border border-border bg-secondary/60 p-1">
+                      {(["BRL", "USD"] as const).map((currency) => (
+                        <button
+                          key={currency}
+                          type="button"
+                          onClick={() => setAnswers((current) => ({ ...current, currency }))}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                            answers.currency === currency
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {currency === "BRL" ? "R$" : "US$"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <SliderRow
+                    icon={<CircleDollarSign className="w-4 h-4 text-primary" />}
+                    label={copy.costHour}
+                    value={answers.costHour}
+                    min={10}
+                    max={500}
+                    step={5}
+                    suffix=""
+                    onChange={(costHour) => setAnswers((current) => ({ ...current, costHour }))}
+                  />
+                  <SliderRow
+                    icon={<Users className="w-4 h-4 text-primary" />}
+                    label={copy.teamSize}
+                    value={answers.teamSize}
+                    min={1}
+                    max={50}
+                    step={1}
+                    suffix={copy.peopleSuffix}
+                    onChange={(teamSize) => setAnswers((current) => ({ ...current, teamSize }))}
+                  />
+                  <p className="text-xs text-muted-foreground">{copy.teamHelp}</p>
+                </QuestionCard>
+
+                <QuestionCard title={copy.optionalSegment}>
+                  <input
+                    type="text"
+                    value={answers.segment}
+                    onChange={(event) =>
+                      setAnswers((current) => ({ ...current, segment: event.target.value }))
+                    }
+                    placeholder={copy.segmentPlaceholder}
+                    className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 transition"
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {[
+                      copy.segmentAgency,
+                      copy.segmentAccounting,
+                      copy.segmentClinic,
+                      copy.segmentConsulting,
+                      copy.segmentStartup,
+                      copy.segmentEcommerce,
+                      copy.segmentLaw,
+                      copy.segmentEducation,
+                    ].map((segment) => (
+                      <button
+                        key={segment}
+                        type="button"
+                        onClick={() => setAnswers((current) => ({ ...current, segment }))}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                          answers.segment === segment
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-secondary text-muted-foreground hover:border-primary/60"
+                        }`}
+                      >
+                        {segment}
+                      </button>
+                    ))}
+                  </div>
+                </QuestionCard>
+
+                <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5 sm:p-6 card-elev flex flex-col justify-between">
+                  <div>
+                    <div className="text-xs uppercase tracking-widest text-primary">
+                      {copy.estimatedRange}
+                    </div>
+                    <div className="mt-3 text-xl font-medium">
+                      {localize(selectedTask.title, locale)}
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {localize(selectedTask.description, locale)}
+                    </p>
+                  </div>
+                  <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-lg border border-border bg-background/30 p-3">
+                      <div className="text-[10px] uppercase text-muted-foreground">
+                        {copy.potentialTime}
+                      </div>
+                      <div className="mt-1 font-semibold text-blue-gradient">
+                        {rangeLabel(metrics.timeMin, metrics.timeMax, locale, "h")}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border bg-background/30 p-3">
+                      <div className="text-[10px] uppercase text-muted-foreground">
+                        {copy.opportunityScore}
+                      </div>
+                      <div className="mt-1 font-semibold text-blue-gradient">
+                        {metrics.score}/100
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 justify-between">
               <div className="text-xs text-muted-foreground flex items-center gap-2">
                 <div
-                  className={`h-2 w-2 rounded-full ${answersComplete ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-orange-500 animate-pulse"}`}
+                  className={`h-2 w-2 rounded-full ${answersComplete ? "bg-green-500" : "bg-orange-500 animate-pulse"}`}
                 />
                 {answersComplete ? copy.ready : copy.incomplete}
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setAnswers(INITIAL_ANSWERS);
-                    setShowResult(false);
-                  }}
-                  className="px-5 py-2.5 rounded-full border border-border bg-secondary/60 hover:bg-secondary text-sm text-foreground transition"
-                >
-                  {copy.reset}
-                </button>
-                <button
-                  onClick={finishDiagnostic}
-                  disabled={!answersComplete}
-                  className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition glow disabled:opacity-40 disabled:cursor-not-allowed group flex items-center gap-2"
-                >
-                  {copy.seeResult}
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={finishDiagnostic}
+                disabled={!answersComplete}
+                className="inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full bg-primary text-primary-foreground font-medium hover:opacity-90 transition glow disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {copy.seeResult}
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </section>
         )}
 
-        {showResult && answers.pain && (
+        {showResult && selectedTask && selectedCategory && (
           <section ref={resultRef} id="resultado" className="mt-20 sm:mt-24 scroll-mt-24">
             <SectionLabel>{copy.resultSection}</SectionLabel>
-            <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight">
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary">
+              <CategoryIcon id={selectedCategory.id} className="h-3.5 w-3.5" />
+              {localize(selectedCategory.title, locale)}
+            </div>
+            <h2 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight">
               {copy.resultTitle1}{" "}
-              <span className="text-blue-gradient">
-                {totalHours.toFixed(0)}
-                {copy.resultTitle2}
-              </span>
+              <span className="text-blue-gradient">{localize(selectedTask.title, locale)}</span>
             </h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">{copy.resultBody}</p>
+            <p className="mt-3 max-w-3xl text-muted-foreground">{copy.resultBody}</p>
 
-            <div className="mt-8 sm:mt-10 grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5">
+            <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
-                label={copy.hoursFreed}
-                value={`${totalHours.toFixed(0)}h`}
-                sub={copy.timeBack}
+                label={copy.currentEffort}
+                value={`${formatHours(metrics.manualHours, locale)}h`}
+                sub={locale === "pt" ? "por mês, antes da Lynx" : "per month, before Lynx"}
               />
               <StatCard
-                label={copy.monthlySavings}
-                value={formatUsd(totalMonthly, locale)}
-                sub={copy.conservative}
+                label={copy.potentialTime}
+                value={rangeLabel(metrics.timeMin, metrics.timeMax, locale, "h")}
+                sub={copy.estimatedRange}
                 highlight
               />
               <StatCard
-                label={copy.annualSavings}
-                value={formatUsd(totalMonthly * 12, locale)}
-                sub={copy.twelveMonths}
+                label={copy.potentialSavings}
+                value={`${formatMoney(metrics.savingsMin, answers.currency, locale)}–${formatMoney(metrics.savingsMax, answers.currency, locale)}`}
+                sub={copy.estimatedRange}
+              />
+              <StatCard
+                label={copy.opportunityScore}
+                value={`${metrics.score}/100`}
+                sub={metrics.score >= 80 ? copy.highFit : copy.mediumFit}
+                highlight
               />
             </div>
 
-            <div className="mt-8 rounded-2xl border-2 bg-primary/5 p-6 sm:p-7 pulse-glow">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="text-[11px] uppercase tracking-widest text-primary font-semibold">
-                  {copy.customScenario}
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  {percentReduction(custom)}% {copy.lessTime}
-                </div>
-              </div>
-              <div className="mt-2 text-lg sm:text-xl font-medium">{custom.scenario}</div>
-              <div className="mt-5 grid grid-cols-3 gap-3 sm:gap-6 text-sm">
+            <div className="mt-6 rounded-2xl border border-border bg-card p-5 sm:p-6 card-elev">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-muted-foreground text-xs">{copy.hoursMonth}</div>
-                  <div className="text-xl sm:text-2xl font-semibold mt-1">
-                    {hoursSaved(custom).toFixed(1)}h
+                  <div className="text-xs uppercase tracking-widest text-primary">
+                    {copy.estimatedRange}
+                  </div>
+                  <div className="mt-2 text-lg font-medium">
+                    {answers.volume} {localize(selectedTask.unit, locale)} · {answers.manualMin}
+                    {copy.minuteSuffix}
                   </div>
                 </div>
-                <div>
-                  <div className="text-muted-foreground text-xs">{copy.savingsMonth}</div>
-                  <div className="text-xl sm:text-2xl font-semibold mt-1 text-blue-gradient">
-                    {formatUsd(monthlySavings(custom), locale)}
+                <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-right">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {locale === "pt" ? "Tempo estimado com Lynx" : "Estimated time with Lynx"}
                   </div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground text-xs">{copy.savingsYear}</div>
-                  <div className="text-xl sm:text-2xl font-semibold mt-1">
-                    {formatUsd(yearlySavings(custom), locale)}
+                  <div className="mt-1 text-lg font-semibold text-blue-gradient">
+                    {metrics.lynxMin}–{metrics.lynxMax}
+                    {copy.minuteSuffix}
                   </div>
                 </div>
               </div>
             </div>
 
+            <div className="mt-8 rounded-2xl border border-border bg-card p-6 sm:p-8 card-elev">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-primary">
+                    {copy.whatLynxDoes}
+                  </div>
+                  <h3 className="mt-1 text-xl font-semibold">
+                    {localize(selectedTask.title, locale)}
+                  </h3>
+                </div>
+              </div>
+              <div className="mt-7 grid md:grid-cols-2 gap-7">
+                <div>
+                  <h4 className="text-xs uppercase tracking-widest text-muted-foreground">
+                    {copy.workflowPlan}
+                  </h4>
+                  <ol className="mt-4 space-y-3">
+                    {selectedTask.steps.map((step, index) => (
+                      <li key={localize(step, "en")} className="flex gap-3 text-sm">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                          {index + 1}
+                        </span>
+                        <span className="pt-0.5 text-foreground/90">{localize(step, locale)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+                <div>
+                  <h4 className="text-xs uppercase tracking-widest text-muted-foreground">
+                    {copy.deliverables}
+                  </h4>
+                  <ul className="mt-4 space-y-3">
+                    {selectedTask.outputs.map((output) => (
+                      <li key={localize(output, "en")} className="flex gap-3 text-sm">
+                        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <span className="text-foreground/90">{localize(output, locale)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 rounded-2xl border-2 border-primary/45 bg-gradient-to-br from-primary/10 to-transparent p-6 sm:p-8 glow">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-primary">
+                    {copy.firstPromptTitle}
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">{copy.firstPromptBody}</p>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs text-green-400">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  {locale === "pt" ? "Aprovação humana incluída" : "Human approval included"}
+                </div>
+              </div>
+              <textarea
+                value={promptDraft}
+                onChange={(event) => setPromptDraft(event.target.value)}
+                aria-label={copy.firstPromptTitle}
+                className="mt-5 min-h-[430px] w-full resize-y rounded-xl border border-border bg-background/75 p-4 font-mono text-xs leading-relaxed text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+              <div className="mt-4 flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={copyPrompt}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:opacity-90 transition"
+                >
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied ? copy.copied : copy.copyPrompt}
+                </button>
+                <a
+                  href={PLATFORM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-primary/50 bg-primary/10 px-6 py-3 text-sm font-medium text-primary hover:bg-primary/20 transition"
+                >
+                  {copy.runInLynx}
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
+              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{copy.promptTip}</p>
+            </div>
+
             <div className="mt-10">
-              <h3 className="text-sm uppercase tracking-widest text-muted-foreground">
-                {copy.recommendedWorkflows}
-              </h3>
-              <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                {recommended.map((c) => (
-                  <CaseCard key={c.flow} c={localizeCase(c, locale)} locale={locale} />
+              <h3 className="text-xl font-semibold">{copy.relatedTitle}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{copy.relatedBody}</p>
+              <div className="mt-5 grid md:grid-cols-3 gap-4">
+                {relatedTasks.map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={() => selectRelatedTask(task)}
+                    className="rounded-xl border border-border bg-card p-5 text-left hover:border-primary/60 transition group"
+                  >
+                    <span className="text-sm font-medium group-hover:text-primary transition">
+                      {localize(task.title, locale)}
+                    </span>
+                    <span className="mt-2 block text-xs leading-relaxed text-muted-foreground">
+                      {localize(task.description, locale)}
+                    </span>
+                    <span className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                      {copy.useWorkflow} <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  </button>
                 ))}
               </div>
             </div>
 
-            <div className="mt-10 rounded-2xl border border-primary/40 bg-gradient-to-br from-primary/10 to-transparent p-6 sm:p-8 text-center">
+            <div className="mt-8 rounded-xl border border-border bg-secondary/30 p-5 flex gap-4">
+              <ShieldCheck className="h-5 w-5 shrink-0 text-primary" />
+              <div>
+                <div className="text-sm font-medium">{copy.methodologyTitle}</div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {copy.methodologyBody}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">{copy.scoreInternal}</p>
+              </div>
+            </div>
+
+            <div className="mt-8 rounded-2xl border border-primary/40 bg-primary/5 p-6 sm:p-8 text-center">
               <div className="text-xs uppercase tracking-widest text-primary">{copy.nextStep}</div>
               <h3 className="mt-2 text-2xl sm:text-3xl font-semibold">
                 {copy.recommendPlan1}{" "}
                 <span className="text-blue-gradient">{plans[recommendedPlanIdx].name}</span>{" "}
                 {copy.recommendPlan2}
               </h3>
-              <p className="mt-2 text-sm text-muted-foreground max-w-xl mx-auto">
-                {copy.basedOnSavings}{" "}
-                <strong className="text-foreground">
-                  {formatUsd(totalMonthly, locale)}
-                  {copy.perMonth}
-                </strong>
-                .
+              <p className="mt-2 text-sm text-muted-foreground">
+                {locale === "pt"
+                  ? `Com base no potencial conservador de ${formatHours(metrics.timeMin, locale)} horas recuperadas por mês.`
+                  : `Based on the conservative potential of ${formatHours(metrics.timeMin, locale)} recovered hours per month.`}
               </p>
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-                <button
-                  onClick={goToPlan}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-medium hover:opacity-90 transition glow"
-                >
-                  {copy.seeIdealPlan}
-                </button>
-                <a
-                  href={PLATFORM_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-primary/50 bg-primary/10 text-primary font-medium hover:bg-primary/20 transition"
-                >
-                  {copy.getStartedWith} {plans[recommendedPlanIdx].name} →
-                </a>
-              </div>
-              <div className="mt-4 text-xs text-muted-foreground inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/5 px-4 py-1.5">
-                <span className="text-yellow-400 font-semibold">LAUNCH30</span>
-                <span className="text-muted-foreground/70">·</span>
-                <span>{copy.launchOffer}</span>
-              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  planRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                className="mt-5 inline-flex items-center gap-2 rounded-full border border-primary/50 bg-primary/10 px-6 py-3 text-sm font-medium text-primary hover:bg-primary/20 transition"
+              >
+                {copy.seeIdealPlan}
+              </button>
             </div>
           </section>
         )}
 
-        <section id="receita-anchor" className="mt-24 sm:mt-32">
+        <section id="biblioteca" className="mt-24 sm:mt-32 scroll-mt-24">
           <SectionLabel>{copy.librarySection}</SectionLabel>
-          <div className="mt-3 flex items-end justify-between flex-wrap gap-4">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight">
-              <span className="text-blue-gradient tabular-nums">{totalCatalogued}</span>{" "}
-              {copy.calculatedPeriod}
-              <br />
-              <span className="text-muted-foreground">
-                {copy.externalPlusInternal}{" "}
-                {extraCalcs > 0 && (
-                  <span className="text-sm font-normal">
-                    · +{extraCalcs} {copy.fromDiagnostic}
-                  </span>
-                )}
-                .
-              </span>
-            </h2>
-          </div>
-          <Library locale={locale} />
+          <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight">
+            {copy.libraryTitle}
+          </h2>
+          <p className="mt-3 max-w-3xl text-muted-foreground">{copy.libraryBody}</p>
+          <Library locale={locale} onChooseCategory={(id) => chooseCategory(id, true)} />
         </section>
 
         <section id="receita" className="mt-24 sm:mt-32 scroll-mt-24">
@@ -568,22 +810,23 @@ function Index() {
           <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight">
             {copy.revenueTitle1} <span className="text-blue-gradient">{copy.revenueTitle2}</span>
           </h2>
+          <p className="mt-3 max-w-3xl text-muted-foreground">{copy.revenueDisclaimer}</p>
           <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
             {REVENUE_CASES.map((source) => {
-              const r = localizeRevenueCase(source, locale);
+              const revenueCase = localizeRevenueCase(source, locale);
               return (
                 <div
-                  key={r.flow}
+                  key={revenueCase.flow}
                   className="rounded-2xl border border-border bg-card p-6 card-elev"
                 >
-                  <div className="text-base font-medium">{r.flow}</div>
-                  <p className="mt-2 text-sm text-muted-foreground">{r.scenario}</p>
-                  <div className="mt-5 flex items-baseline gap-3">
-                    <div className="text-2xl font-semibold text-blue-gradient">{r.monthly}</div>
+                  <div className="text-base font-medium">{revenueCase.flow}</div>
+                  <p className="mt-2 text-sm text-muted-foreground">{revenueCase.scenario}</p>
+                  <div className="mt-5 text-2xl font-semibold text-blue-gradient">
+                    {revenueCase.monthly}
                   </div>
-                  <div className="text-sm text-muted-foreground">{r.yearly}</div>
+                  <div className="text-sm text-muted-foreground">{revenueCase.yearly}</div>
                   <p className="mt-4 text-xs text-muted-foreground/80 border-t border-border pt-3">
-                    {r.note}
+                    {revenueCase.note}
                   </p>
                 </div>
               );
@@ -596,41 +839,32 @@ function Index() {
           <h2 className="mt-3 text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight">
             {copy.plansTitle}
           </h2>
-          {showResult && (
-            <p className="mt-3 text-sm text-muted-foreground">
-              {copy.highlightedPlan1}{" "}
-              <strong className="text-primary">{plans[recommendedPlanIdx].name}</strong>{" "}
-              {copy.highlightedPlan2}
-            </p>
-          )}
           <div className="mt-8 sm:mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {plans.map((p, i) => {
-              const isRecommended = showResult && i === recommendedPlanIdx;
+            {plans.map((plan, index) => {
+              const recommended = showResult && index === recommendedPlanIdx;
               return (
                 <div
-                  key={p.name}
+                  key={plan.name}
                   className={`relative rounded-2xl border p-6 card-elev transition ${
-                    isRecommended
-                      ? `border-primary bg-primary/10 glow ${flashPlan ? "pulse-glow" : ""}`
-                      : "border-border bg-card"
+                    recommended ? "border-primary bg-primary/10 glow" : "border-border bg-card"
                   }`}
                 >
-                  {isRecommended && (
+                  {recommended && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] uppercase tracking-widest font-semibold">
                       {copy.recommended}
                     </div>
                   )}
-                  <div className="text-sm text-muted-foreground">{p.name}</div>
-                  <div className="mt-2 text-2xl font-semibold">{p.price}</div>
-                  <p className="mt-4 text-sm text-foreground/90">{p.who}</p>
-                  <p className="mt-3 text-xs text-muted-foreground">{p.note}</p>
+                  <div className="text-sm text-muted-foreground">{plan.name}</div>
+                  <div className="mt-2 text-2xl font-semibold">{plan.price}</div>
+                  <p className="mt-4 text-sm text-foreground/90">{plan.who}</p>
+                  <p className="mt-3 text-xs text-muted-foreground">{plan.note}</p>
                   <a
                     href={PLATFORM_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition glow"
+                    className="mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
                   >
-                    {copy.choose} {p.name} →
+                    {copy.choose} {plan.name} →
                   </a>
                   <div className="mt-2 text-[10px] text-center text-yellow-400/80">
                     {copy.couponInstruction} <span className="font-semibold">LAUNCH30</span>{" "}
@@ -650,6 +884,7 @@ function Index() {
           <p className="mt-4 max-w-2xl mx-auto text-muted-foreground">{copy.restartBody}</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button
+              type="button"
               onClick={startDiagnostic}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-medium hover:opacity-90 transition glow"
             >
@@ -664,15 +899,10 @@ function Index() {
               {copy.goToLynx}
             </a>
           </div>
-          <div className="mt-6 text-xs text-muted-foreground inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/5 px-4 py-1.5">
-            <span className="text-yellow-400 font-semibold">LAUNCH30</span>
-            <span className="text-muted-foreground/70">·</span>
-            <span>{copy.launchOffer}</span>
-          </div>
         </section>
 
         <footer className="mt-20 sm:mt-24 text-xs text-muted-foreground border-t border-border pt-8 flex justify-between flex-wrap gap-4">
-          <div>© Apex7AI — Lynx Agent</div>
+          <div>© Apex7 AI — LynxMetric</div>
           <div>{copy.footerSources}</div>
         </footer>
       </main>
@@ -692,40 +922,54 @@ function Header({
   onStart: () => void;
 }) {
   const copy = getCopy(locale);
-
   return (
     <header className="sticky top-0 z-30 backdrop-blur-xl bg-background/70 border-b border-border/60">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between">
         <button
+          type="button"
           onClick={onHome}
           className="flex items-center gap-2.5 group"
           aria-label={copy.backToTop}
         >
           <img
             src={logoGif}
-            alt="Apex7AI"
+            alt="Apex7 AI"
             className="h-9 w-9 rounded-md object-cover ring-1 ring-primary/40 group-hover:ring-primary transition"
           />
           <div className="font-semibold tracking-tight">
-            Apex7AI{" "}
-            <span className="text-muted-foreground font-normal hidden sm:inline">/ Lynx</span>
+            Apex7 AI{" "}
+            <span className="text-muted-foreground font-normal hidden sm:inline">/ LynxMetric</span>
           </div>
         </button>
         <nav className="hidden lg:flex items-center gap-1 text-sm bg-secondary/60 border border-border rounded-full px-1 py-1">
-          {[
-            { l: copy.navDiagnostic, id: "diagnostico" },
-            { l: copy.navLibrary, id: "biblioteca" },
-            { l: copy.navRevenue, id: "receita" },
-            { l: copy.navPlans, id: "planos" },
-          ].map((n) => (
-            <button
-              key={n.id}
-              onClick={() => smoothScrollTo(n.id)}
-              className="px-4 py-1.5 rounded-full text-muted-foreground hover:text-foreground transition"
-            >
-              {n.l}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={onStart}
+            className="px-4 py-1.5 rounded-full text-muted-foreground hover:text-foreground transition"
+          >
+            {copy.navDiagnostic}
+          </button>
+          <button
+            type="button"
+            onClick={() => smoothScrollTo("biblioteca")}
+            className="px-4 py-1.5 rounded-full text-muted-foreground hover:text-foreground transition"
+          >
+            {copy.navLibrary}
+          </button>
+          <button
+            type="button"
+            onClick={() => smoothScrollTo("receita")}
+            className="px-4 py-1.5 rounded-full text-muted-foreground hover:text-foreground transition"
+          >
+            {copy.navRevenue}
+          </button>
+          <button
+            type="button"
+            onClick={() => smoothScrollTo("planos")}
+            className="px-4 py-1.5 rounded-full text-muted-foreground hover:text-foreground transition"
+          >
+            {copy.navPlans}
+          </button>
         </nav>
         <div className="flex items-center gap-2">
           <div
@@ -740,10 +984,9 @@ function Header({
                 type="button"
                 onClick={() => onLocaleChange(option)}
                 aria-pressed={locale === option}
-                aria-label={option === "pt" ? "Português" : "English"}
                 className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase transition ${
                   locale === option
-                    ? "bg-primary text-primary-foreground shadow-sm"
+                    ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -752,19 +995,12 @@ function Header({
             ))}
           </div>
           <button
+            type="button"
             onClick={onStart}
             className="hidden sm:inline-flex px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
           >
             {copy.start}
           </button>
-          <a
-            href={PLATFORM_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden xl:inline-flex px-4 py-2 rounded-full border border-primary/50 text-primary text-sm font-medium hover:bg-primary/10 transition"
-          >
-            {copy.getStarted}
-          </a>
         </div>
       </div>
     </header>
@@ -783,7 +1019,6 @@ function Hero({
   totalCases: number;
 }) {
   const copy = getCopy(locale);
-
   return (
     <section className="pt-20 sm:pt-24 md:pt-32 text-center">
       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-secondary/60 text-xs text-muted-foreground">
@@ -795,17 +1030,19 @@ function Hero({
         <br />
         <span className="text-blue-gradient">{copy.heroTitle2}</span>
       </h1>
-      <p className="mt-6 max-w-2xl mx-auto text-base sm:text-lg text-muted-foreground px-2">
+      <p className="mt-6 max-w-3xl mx-auto text-base sm:text-lg text-muted-foreground px-2">
         {copy.heroBody}
       </p>
       <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
         <button
+          type="button"
           onClick={onStart}
           className="w-full sm:w-auto px-6 py-3 rounded-full bg-primary text-primary-foreground font-medium hover:opacity-90 transition glow"
         >
           {copy.startDiagnostic}
         </button>
         <button
+          type="button"
           onClick={onLibrary}
           className="w-full sm:w-auto px-6 py-3 rounded-full border border-border bg-secondary/60 hover:bg-secondary text-foreground transition"
         >
@@ -822,22 +1059,22 @@ function Hero({
       </div>
       <div className="mt-4 text-xs text-muted-foreground inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/5 px-4 py-1.5">
         <span className="text-yellow-400 font-semibold">LAUNCH30</span>
-        <span className="text-muted-foreground/70">·</span>
+        <span>·</span>
         <span>{copy.launchOffer}</span>
       </div>
-      <div className="mt-12 sm:mt-16 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
+      <div className="mt-12 sm:mt-16 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-4xl mx-auto">
         {[
           { k: `${totalCases}`, v: copy.casesCalculated },
-          { k: copy.twoLines, v: copy.externalInternal },
-          { k: copy.roi, v: copy.timeMoney },
-          { k: copy.sources, v: copy.marketDiagnostic },
-        ].map((s) => (
+          { k: copy.areas, v: copy.workCategories },
+          { k: copy.readyPrompt, v: copy.firstWorkflow },
+          { k: copy.bilingual, v: copy.fullExperience },
+        ].map((stat) => (
           <div
-            key={s.k}
+            key={stat.k}
             className="rounded-xl border border-border bg-card/60 p-4 text-left card-elev"
           >
-            <div className="text-xl font-semibold text-blue-gradient">{s.k}</div>
-            <div className="text-xs text-muted-foreground mt-1">{s.v}</div>
+            <div className="text-xl font-semibold text-blue-gradient">{stat.k}</div>
+            <div className="text-xs text-muted-foreground mt-1">{stat.v}</div>
           </div>
         ))}
       </div>
@@ -845,13 +1082,19 @@ function Hero({
   );
 }
 
-function SectionLabel({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+function CategoryIcon({ id, className }: { id: WorkflowCategoryId; className?: string }) {
+  const props = { className };
+  if (id === "management") return <Briefcase {...props} />;
+  if (id === "sales") return <Target {...props} />;
+  if (id === "marketing") return <Megaphone {...props} />;
+  if (id === "research") return <Search {...props} />;
+  if (id === "operations") return <Settings {...props} />;
+  if (id === "hr") return <Users {...props} />;
+  if (id === "support") return <Headphones {...props} />;
+  return <Code2 {...props} />;
+}
+
+function SectionLabel({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div
       className={`inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-primary ${className}`}
@@ -862,9 +1105,9 @@ function SectionLabel({
   );
 }
 
-function QuestionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function QuestionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 card-elev relative overflow-hidden group">
+    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 card-elev relative overflow-hidden">
       <div className="text-sm font-medium text-foreground/90 mb-6 flex items-center gap-2">
         <ChevronRight className="w-4 h-4 text-primary" />
         {title}
@@ -884,18 +1127,18 @@ function SliderRow({
   suffix,
   onChange,
 }: {
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   label: string;
   value: number;
   min: number;
   max: number;
   step: number;
   suffix: string;
-  onChange: (v: number) => void;
+  onChange: (value: number) => void;
 }) {
   return (
-    <div className="mb-6 last:mb-0 group/slider">
-      <div className="flex justify-between text-xs text-muted-foreground mb-3 items-center">
+    <div className="mb-6 last:mb-0">
+      <div className="flex justify-between text-xs text-muted-foreground mb-3 items-center gap-3">
         <div className="flex items-center gap-2">
           {icon}
           <span>{label}</span>
@@ -905,23 +1148,21 @@ function SliderRow({
           {suffix}
         </span>
       </div>
-      <div className="relative flex items-center">
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="slider-modern w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none"
-        />
-      </div>
-      <div className="flex justify-between mt-2 px-1">
-        <span className="text-[10px] text-muted-foreground/50">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="slider-modern w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none"
+      />
+      <div className="flex justify-between mt-2 px-1 text-[10px] text-muted-foreground/50">
+        <span>
           {min}
           {suffix}
         </span>
-        <span className="text-[10px] text-muted-foreground/50">
+        <span>
           {max}
           {suffix}
         </span>
@@ -943,27 +1184,38 @@ function StatCard({
 }) {
   return (
     <div
-      className={`rounded-2xl p-6 border card-elev ${highlight ? "border-primary bg-primary/5 glow" : "border-border bg-card"}`}
+      className={`rounded-2xl p-5 border card-elev ${highlight ? "border-primary bg-primary/5" : "border-border bg-card"}`}
     >
-      <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
       <div
-        className={`mt-3 text-3xl sm:text-4xl font-semibold ${highlight ? "text-blue-gradient" : ""}`}
+        className={`mt-3 text-2xl sm:text-3xl font-semibold break-words ${highlight ? "text-blue-gradient" : ""}`}
       >
         {value}
       </div>
-      <div className="mt-2 text-sm text-muted-foreground">{sub}</div>
+      <div className="mt-2 text-xs text-muted-foreground">{sub}</div>
     </div>
   );
 }
 
-function CaseCard({ c, locale }: { c: RoiCase; locale: Locale }) {
+function CaseCard({
+  c,
+  locale,
+  categoryId,
+  onUse,
+}: {
+  c: RoiCase;
+  locale: Locale;
+  categoryId: WorkflowCategoryId;
+  onUse: () => void;
+}) {
   const copy = getCopy(locale);
-
+  const category = getWorkflowCategory(categoryId);
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 card-elev hover:border-primary/50 transition group">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest text-primary font-bold">
-          {c.area === "External" ? copy.external : copy.internal}
+    <div className="rounded-2xl border border-border bg-card p-5 card-elev hover:border-primary/50 transition group flex flex-col">
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-primary font-bold">
+          <CategoryIcon id={categoryId} className="h-3 w-3" />
+          {category ? localize(category.title, locale) : copy.referenceScenario}
         </span>
         <span className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
           {percentReduction(c)}% {copy.lessTime}
@@ -980,45 +1232,93 @@ function CaseCard({ c, locale }: { c: RoiCase; locale: Locale }) {
         </div>
         <div>
           <div className="text-[10px] text-muted-foreground uppercase">{copy.monthShort}</div>
-          <div className="text-base font-semibold mt-1">{formatUsd(monthlySavings(c), locale)}</div>
+          <div className="text-base font-semibold mt-1">
+            {formatMoney(monthlySavings(c), "USD", locale)}
+          </div>
         </div>
         <div>
           <div className="text-[10px] text-muted-foreground uppercase">{copy.yearShort}</div>
           <div className="text-base font-semibold mt-1 text-blue-gradient">
-            {formatUsd(yearlySavings(c), locale)}
+            {formatMoney(yearlySavings(c), "USD", locale)}
           </div>
         </div>
       </div>
+      <button
+        type="button"
+        onClick={onUse}
+        className="mt-5 inline-flex items-center justify-center gap-2 rounded-full border border-primary/40 bg-primary/5 px-4 py-2 text-xs font-medium text-primary hover:bg-primary/15 transition"
+      >
+        {copy.useThisArea}
+        <ArrowRight className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
 
-function Library({ locale }: { locale: Locale }) {
-  const [tab, setTab] = useState<"External" | "Internal">("External");
-  const list = CASES.filter((c) => c.area === tab);
+function Library({
+  locale,
+  onChooseCategory,
+}: {
+  locale: Locale;
+  onChooseCategory: (categoryId: WorkflowCategoryId) => void;
+}) {
+  const [categoryFilter, setCategoryFilter] = useState<WorkflowCategoryId | "all">("all");
+  const [lineFilter, setLineFilter] = useState<"All" | "External" | "Internal">("All");
   const copy = getCopy(locale);
+  const filteredCases = CASES.filter((roiCase) => {
+    const categoryMatches =
+      categoryFilter === "all" || getLegacyCaseCategory(roiCase.flow) === categoryFilter;
+    const lineMatches = lineFilter === "All" || roiCase.area === lineFilter;
+    return categoryMatches && lineMatches;
+  });
+
   return (
-    <div id="biblioteca" className="mt-8 scroll-mt-24">
-      <div className="inline-flex bg-secondary/60 border border-border rounded-full p-1">
-        {(["External", "Internal"] as const).map((t) => (
+    <div className="mt-8">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("all")}
+          className={`rounded-full border px-4 py-2 text-xs transition ${categoryFilter === "all" ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/60 text-muted-foreground hover:text-foreground"}`}
+        >
+          {copy.allAreas}
+        </button>
+        {WORKFLOW_CATEGORIES.map((category) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-5 py-1.5 rounded-full text-sm transition font-medium ${
-              tab === t
-                ? "bg-primary text-primary-foreground shadow-lg"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            key={category.id}
+            type="button"
+            onClick={() => setCategoryFilter(category.id)}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs transition ${categoryFilter === category.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/60 text-muted-foreground hover:text-foreground"}`}
           >
-            {t === "External" ? copy.external : copy.internal} (
-            {CASES.filter((c) => c.area === t).length})
+            <CategoryIcon id={category.id} className="h-3.5 w-3.5" />
+            {localize(category.title, locale)}
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 inline-flex bg-secondary/60 border border-border rounded-full p-1">
+        {(["All", "External", "Internal"] as const).map((line) => (
+          <button
+            key={line}
+            type="button"
+            onClick={() => setLineFilter(line)}
+            className={`px-5 py-1.5 rounded-full text-sm transition font-medium ${lineFilter === line ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {line === "All" ? copy.allCases : line === "External" ? copy.external : copy.internal}
           </button>
         ))}
       </div>
       <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {list.map((c) => (
-          <CaseCard key={c.flow} c={localizeCase(c, locale)} locale={locale} />
-        ))}
+        {filteredCases.map((source) => {
+          const categoryId = getLegacyCaseCategory(source.flow);
+          return (
+            <CaseCard
+              key={source.flow}
+              c={localizeCase(source, locale)}
+              locale={locale}
+              categoryId={categoryId}
+              onUse={() => onChooseCategory(categoryId)}
+            />
+          );
+        })}
       </div>
     </div>
   );

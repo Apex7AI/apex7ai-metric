@@ -72,11 +72,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Apex7AI — Lynx Agent Diagnostic" },
-      { name: "description", content: "Find out how much your team loses to manual tasks with Lynx Agent." },
-      { name: "author", content: "Apex7AI" },
-      { property: "og:title", content: "Apex7AI — Lynx Agent Diagnostic" },
-      { property: "og:description", content: "Find out how much your team loses to manual tasks with Lynx Agent." },
+      { title: "LynxMetric — AI Workflow Diagnostic | Apex7 AI" },
+      {
+        name: "description",
+        content:
+          "Find the work your team should stop doing manually and get a ready-to-run Lynx workflow.",
+      },
+      { name: "author", content: "Apex7 AI" },
+      {
+        property: "og:title",
+        content: "LynxMetric — AI Workflow Diagnostic | Apex7 AI",
+      },
+      {
+        property: "og:description",
+        content:
+          "Discover your best automation opportunity, estimate the impact and get your first Lynx instruction.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Apex7AI" },

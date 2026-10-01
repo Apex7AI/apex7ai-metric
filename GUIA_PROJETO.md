@@ -4,13 +4,16 @@ Este documento registra como o projeto funciona, como visualizar mudanças antes
 
 ## 1. Objetivo do projeto
 
-O Apex7AI Metric é um diagnóstico de ROI do Lynx by Apex7AI. Ele ajuda uma pessoa ou empresa a:
+O LynxMetric é um diagnóstico gratuito de workflows do Lynx by Apex7 AI. Ele ajuda uma pessoa ou empresa a:
 
-1. identificar o principal gargalo operacional;
-2. estimar horas recuperadas com automação;
-3. estimar economia mensal e anual;
-4. conhecer fluxos de trabalho semelhantes;
-5. encontrar um plano compatível com o cenário calculado.
+1. identificar a área operacional com maior atrito;
+2. escolher uma tarefa específica, sem misturar departamento, objetivo e formato de arquivo;
+3. estimar uma faixa de horas e custo recuperados;
+4. visualizar as etapas e os entregáveis que a Lynx pode assumir;
+5. receber uma primeira instrução bilíngue e editável;
+6. abrir a Lynx e executar o workflow;
+7. conhecer cenários relacionados sem somá-los artificialmente ao resultado;
+8. encontrar um plano compatível com o potencial conservador calculado.
 
 O Lynx deve ser apresentado como uma IA autônoma para trabalho real, e não como um chatbot. Ele recebe uma instrução, planeja, usa ferramentas e executa trabalhos em várias etapas até entregar um resultado pronto para aprovação.
 
@@ -29,20 +32,25 @@ Ao escrever novos textos, evitar apresentar o Lynx como um sistema que apenas co
 
 ## 2. Estrutura principal
 
-| Arquivo ou pasta                           | Responsabilidade                                                                     |
-| ------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `src/routes/index.tsx`                     | Página principal, estado do diagnóstico, interação e apresentação dos resultados.    |
-| `src/lib/diagnostic-data.ts`               | Casos pesquisados, categorias, fórmulas de economia, receita potencial e dados-base. |
-| `src/lib/i18n.ts`                          | Textos em inglês e português, tradução dos casos e formatação localizada.            |
-| `src/components/ui/`                       | Componentes visuais reutilizáveis. Não contém as regras do diagnóstico.              |
-| `src/styles.css`                           | Tema, cores, tipografia, animações e estilos globais.                                |
-| `src/router.tsx` e `src/routes/__root.tsx` | Inicialização e estrutura de rotas da aplicação.                                     |
-| `Dockerfile`                               | Build de produção e servidor estático utilizado pelo Easypanel.                      |
-| `DEPLOY.md`                                | Informações específicas do deploy no Easypanel.                                      |
+| Arquivo ou pasta                           | Responsabilidade                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `src/routes/index.tsx`                     | Página principal, estado do diagnóstico, interação e apresentação dos resultados.           |
+| `src/lib/diagnostic-data.ts`               | Casos pesquisados, categorias, fórmulas de economia, receita potencial e dados-base.        |
+| `src/lib/workflow-data.ts`                 | Oito áreas, quarenta tarefas, faixas de redução, etapas, entregáveis e geração dos prompts. |
+| `src/lib/i18n.ts`                          | Textos em inglês e português, tradução dos casos e formatação localizada.                   |
+| `src/components/ui/`                       | Componentes visuais reutilizáveis. Não contém as regras do diagnóstico.                     |
+| `src/styles.css`                           | Tema, cores, tipografia, animações e estilos globais.                                       |
+| `src/router.tsx` e `src/routes/__root.tsx` | Inicialização e estrutura de rotas da aplicação.                                            |
+| `Dockerfile`                               | Build de produção e servidor estático utilizado pelo Easypanel.                             |
+| `DEPLOY.md`                                | Informações específicas do deploy no Easypanel.                                             |
 
-### Fonte de verdade dos números
+### Fontes de verdade
 
-Os valores, fórmulas e casos de ROI ficam em `src/lib/diagnostic-data.ts`. Mudanças visuais ou traduções não devem alterar esse arquivo sem uma revisão específica dos dados.
+- Os 45 cenários históricos e suas fórmulas ficam em `src/lib/diagnostic-data.ts`.
+- As áreas, tarefas, faixas estimadas, etapas, entregáveis e instruções ficam em `src/lib/workflow-data.ts`.
+- Os textos gerais e as traduções dos cenários históricos ficam em `src/lib/i18n.ts`.
+
+Mudanças visuais não devem alterar premissas numéricas. Qualquer revisão de volume, unidade ou tempo precisa ser documentada e testada separadamente.
 
 ## 3. O que foi implementado na versão bilíngue
 
@@ -56,9 +64,36 @@ Os valores, fórmulas e casos de ROI ficam em `src/lib/diagnostic-data.ts`. Muda
 - preferência de idioma salva no navegador;
 - troca de idioma sem apagar o diagnóstico preenchido.
 
-As fórmulas, valores pesquisados, categorias e dados-base não foram alterados nessa implementação.
+## 4. O que foi implementado no diagnóstico orientado por workflow
 
-## 4. Como visualizar antes de publicar
+- fluxo `área → tarefa → volume → tempo → contexto → resultado`;
+- oito áreas operacionais e quarenta tarefas em português e inglês;
+- perfil da empresa opcional, usado para personalizar a instrução e não para bloquear o resultado;
+- moeda selecionável entre BRL e USD;
+- volume definido como total mensal da equipe para evitar dupla multiplicação;
+- faixa específica de redução para cada tarefa, em lugar de uma redução fixa para todas;
+- cálculo principal baseado somente na tarefa informada;
+- `Lynx Opportunity Score` interno e explicado no próprio resultado;
+- etapas, entregáveis e prompt editável com regra de aprovação humana;
+- botão para copiar a instrução e abrir a Lynx;
+- biblioteca dos 45 cenários com filtros pelas oito áreas;
+- cenários relacionados apresentados separadamente, sem inflar o ROI;
+- revisão dos casos ambíguos de enriquecimento de CRM e monitoramento de marca;
+- cenário de receita com etapas explícitas de alcance, resposta e conversão.
+
+### Fórmula atual do diagnóstico
+
+```text
+esforço manual mensal = volume total da equipe × minutos por execução ÷ 60
+
+tempo potencial recuperado = esforço manual mensal × faixa de redução da tarefa
+
+custo potencial recuperado = tempo potencial recuperado × custo/hora informado
+```
+
+O tamanho da equipe serve para compreender a operação e personalizar o prompt. Ele não multiplica novamente um volume que já representa o total da equipe.
+
+## 5. Como visualizar antes de publicar
 
 ### Opção A — Docker, recomendada
 
@@ -101,7 +136,7 @@ bun x tsc --noEmit
 bun run build
 ```
 
-## 5. Fluxo seguro para futuras melhorias
+## 6. Fluxo seguro para futuras melhorias
 
 Não é necessário copiar o projeto para outra pasta. O Git já mantém cada ponto de retorno.
 
@@ -124,7 +159,7 @@ git push -u origin feature/nome-da-melhoria
 
 Após a revisão, a branch pode ser incorporada à `main`. O Easypanel está configurado para publicar mudanças enviadas à `main`.
 
-## 6. Backup e pontos de retorno
+## 7. Backup e pontos de retorno
 
 ### Versão anterior ao seletor de português
 
@@ -138,6 +173,21 @@ Uma branch de backup também deve apontar para esse commit:
 
 ```text
 backup/pre-portugues-2026-09-30
+```
+
+### Versão bilíngue anterior ao diagnóstico por categorias
+
+O ponto de retorno da versão bilíngue anterior ao diagnóstico por workflow é:
+
+```text
+commit: 8b9d0a5
+branch: backup/bilingual-v1-2026-09-30
+```
+
+O desenvolvimento do diagnóstico orientado por workflow começou na branch:
+
+```text
+feature/workflow-diagnostic-v2
 ```
 
 ### Como desfazer uma publicação com `git revert`
@@ -174,7 +224,7 @@ Quando `C` for enviado à `main`, o Easypanel fará um novo deploy com o comport
 
 Evite `git reset --hard` na `main`, pois ele reescreve o histórico e aumenta o risco de perda de trabalho.
 
-## 7. Deploy no Easypanel
+## 8. Deploy no Easypanel
 
 O fluxo atual é:
 
@@ -192,7 +242,7 @@ Depois de um push na `main`:
 4. testar inglês e português;
 5. executar um diagnóstico completo.
 
-## 8. Segurança do GitHub
+## 9. Segurança do GitHub
 
 Nunca coloque um token pessoal diretamente na URL do remoto Git.
 
@@ -204,20 +254,21 @@ git remote set-url origin https://github.com/Apex7AI/apex7ai-metric.git
 
 Use o gerenciador de credenciais do sistema ou o GitHub CLI para autenticação. Tokens expostos devem ser revogados e substituídos.
 
-## 9. Próximas melhorias para avaliar
+## 10. Próximas melhorias para avaliar
 
 Esses itens são possibilidades para a próxima etapa e ainda precisam de decisão antes de serem implementados:
 
-- organizar os casos por categorias visuais;
-- transformar a apresentação em uma jornada mais clara por etapas;
-- reforçar a mensagem de IA autônoma e `AI Worker`, evitando aparência de chatbot;
-- preparar um modo de apresentação para o Siará Tech Summit;
-- revisar a experiência no celular e em telas de projeção;
-- revisar textos comerciais em português;
+- confirmar se a aplicação Lynx aceitará deep link com o prompt já preenchido;
+- validar as faixas de redução com execuções reais e feedback de usuários;
+- adicionar captura empresarial opcional depois do resultado;
+- permitir exportar o diagnóstico em PDF ou compartilhar por link;
+- registrar analytics de área, tarefa, resultado e clique em `Executar na Lynx`;
+- adicionar feedback após a primeira tarefa concluída na plataforma;
+- criar modo de apresentação para eventos e telas de projeção;
 - adicionar uma lista de verificação automática para o deploy;
-- avaliar uma área com demonstrações de trabalhos reais executados pelo Lynx.
+- conectar os workflows às demonstrações reais existentes no site da Lynx.
 
-## 10. Regra de trabalho para mudanças futuras
+## 11. Regra de trabalho para mudanças futuras
 
 Antes de qualquer implementação:
 

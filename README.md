@@ -1,6 +1,6 @@
-# Apex7AI — Calculadora de ROI Lynx Agent
+# LynxMetric — Diagnóstico de Workflows com IA
 
-Calculadora operacional inteligente desenvolvida para diagnosticar gargalos, estimar economia de tempo/dinheiro e recomendar planos de automação com o Lynx Agent.
+Diagnóstico gratuito da Apex7 AI que transforma uma dor operacional em uma estimativa transparente, um workflow recomendado e uma primeira instrução pronta para executar na Lynx.
 
 ![Apex7AI Logo](./src/assets/apex7ai-logo.gif)
 
@@ -14,10 +14,14 @@ Calculadora operacional inteligente desenvolvida para diagnosticar gargalos, est
 
 ## 📊 Funcionalidades
 
-- **Diagnóstico em 4 Etapas:** Identificação de nicho, gargalo e volume operacional.
-- **Cálculo de ROI em tempo real:** Fórmulas dinâmicas de economia mensal e anual.
-- **Biblioteca de Casos de Uso:** Exemplos reais de automação com integração (Notion, Slack, CRM, Gmail).
-- **Recomendação Inteligente de Planos:** Sugere o plano ideal com base na economia estimada.
+- **8 áreas e 40 tarefas orientadas por problema:** gestão, vendas, marketing, pesquisa, operações, RH, atendimento e tecnologia.
+- **Diagnóstico em 4 etapas:** área, tarefa específica, volume/esforço e contexto do negócio.
+- **Estimativa por faixa:** cada tarefa possui uma faixa própria de redução de esforço, sem somar casos não informados pelo visitante.
+- **Lynx Opportunity Score:** indicador interno de aderência baseado na tarefa, repetitividade e esforço atual.
+- **Primeira instrução pronta:** prompt bilíngue e editável com plano, entregáveis, fontes e aprovação humana.
+- **Biblioteca categorizada:** os 45 cenários pesquisados continuam disponíveis como referências filtráveis.
+- **Português e inglês:** toda a jornada, as tarefas e os prompts funcionam nos dois idiomas.
+- **Recomendação de plano:** usa o potencial conservador de horas recuperadas.
 
 ## 🛠️ Como rodar localmente
 
